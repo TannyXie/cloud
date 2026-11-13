@@ -64,7 +64,7 @@ export function LoginScreen({ returnTo }: { returnTo: string }) {
             <Button type="submit" size="lg" disabled={login.isPending || email.trim() === ''}>
               登录
             </Button>
-            {refused && <p className="text-sm text-destructive">该邮箱不在演示团队中，请让 owner 邀请后再登录。</p>}
+            {refused && <p className="text-sm text-destructive">该邮箱不在演示团队中，请让管理员邀请后再登录。</p>}
             {login.isError && !refused && <p className="text-sm text-destructive">登录失败，请重试。</p>}
           </>
         )}

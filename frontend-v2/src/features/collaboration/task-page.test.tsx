@@ -376,7 +376,7 @@ it('keeps 确认完成 and 取消任务 from an assignee, and says who decides',
   renderPage()
   expect(await screen.findByRole('button', { name: '确认完成' })).toBeDisabled()
   expect(screen.getByRole('button', { name: '取消任务' })).toBeDisabled()
-  expect(screen.getByText('等待 陈默 验收。只有创建人 陈默 或工作区 owner 能确认完成或取消任务。')).toBeInTheDocument()
+  expect(screen.getByText('等待 陈默 验收。只有创建人 陈默 或工作区管理员能确认完成或取消任务。')).toBeInTheDocument()
 })
 
 it('leaves an assignee the moves that are theirs', async () => {

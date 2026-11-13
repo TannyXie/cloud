@@ -47,7 +47,7 @@ export const canCloseTask = (task: Task, me: string, role: string | undefined): 
   isWorkspaceAdministrator(role) || task.createdBy === me
 
 /** Why the caller cannot end the task, named after who can. */
-export const closeRefusal = (task: Task, action: string): string => `只有创建人 ${task.createdByName} 或工作区 owner 能${action}。`
+export const closeRefusal = (task: Task, action: string): string => `只有创建人 ${task.createdByName} 或工作区管理员能${action}。`
 
 /** The filter value of a task's assignee; unassigned work has its own. */
 export const UNASSIGNED = 'none'

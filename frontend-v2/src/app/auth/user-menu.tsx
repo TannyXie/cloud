@@ -9,7 +9,7 @@ import { useRole, useUser } from './user'
 export function UserMenu() {
   const user = useUser()
   const role = useRole()
-  const roleLabel = role === 'owner' ? 'owner' : role === 'member' ? '成员' : ''
+  const roleLabel = role === 'owner' ? '管理员' : role === 'member' ? '成员' : ''
   const queryClient = useQueryClient()
   // Dropping every cached query makes the session gate ask /api/v1/me again and show the login.
   const signOut = useMutation({

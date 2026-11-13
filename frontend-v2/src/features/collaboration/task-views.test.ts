@@ -106,8 +106,8 @@ describe('who may send the Agent a turn', () => {
     expect(boardMove(assigned, 'done', true).ok).toBe(true)
     const refused = boardMove(assigned, 'done', false)
     expect(refused.ok).toBe(false)
-    expect(refused.reason).toBe('只有创建人 陈默 或工作区 owner 能确认完成。')
-    expect(boardMove(assigned, 'cancelled', false).reason).toBe('只有创建人 陈默 或工作区 owner 能取消任务。')
+    expect(refused.reason).toBe('只有创建人 陈默 或工作区管理员能确认完成。')
+    expect(boardMove(assigned, 'cancelled', false).reason).toBe('只有创建人 陈默 或工作区管理员能取消任务。')
     // Handing the work to 待验收 stays with whoever does it.
     expect(boardMove({ ...assigned, status: 'running' }, 'review', false).ok).toBe(true)
   })
