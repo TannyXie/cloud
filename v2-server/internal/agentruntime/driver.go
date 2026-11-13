@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/wanglongan587/cloud/v2-server/internal/execution"
+	"github.com/wanglongan587/cloud/v2-server/internal/node"
 	"github.com/wanglongan587/cloud/v2-server/internal/nodeservices"
 )
 
@@ -82,8 +83,8 @@ func New(opts Options) (*Driver, error) {
 			return nil, err
 		}
 	}
-	guardianSocket := filepath.Join(opts.Root, "0000000000000000", "w", "h", "scopes", "00000000-0000-0000-0000-000000000001", "control.sock")
-	if filepath.Clean(opts.Root) != opts.Root || len(guardianSocket) >= 108 {
+	// A project's runtime root is <Root>/<16 hex digits>/w; Node's control socket is its longest path.
+	if filepath.Clean(opts.Root) != opts.Root || len(node.ControlSocket(filepath.Join(opts.Root, "0000000000000000", "w"))) >= 108 {
 		return nil, errors.New("Agent runtime root exceeds the Unix socket path limit; choose a shorter, clean V2_DATA_DIR")
 	}
 	bindings := make(map[string]nodeservices.Binding, len(opts.Bindings))

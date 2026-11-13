@@ -53,7 +53,9 @@ func TestResolveFollowsTheEnvironmentTable(t *testing.T) {
 	if _, err := Resolve("ora_v2", getenv); err == nil {
 		t.Fatal("unknown environment accepted")
 	}
-	if _, err := Resolve("newcomer", func(k string) string { return map[string]string{"ORA_DEMO_DATA": "/home/ubuntu/ora-demo/data"}[k] }); err == nil {
+	if _, err := Resolve("newcomer", func(k string) string {
+		return map[string]string{"ORA_DEMO_DATA": "/home/ubuntu/ora-demo/data/" + strings.Repeat("x", 40)}[k]
+	}); err == nil {
 		t.Fatal("accepted a data directory too long for the Node sockets")
 	}
 	c, _ := Resolve("lead", func(k string) string { return map[string]string{"ORA_DEMO_DATA": "/tmp/it's"}[k] })

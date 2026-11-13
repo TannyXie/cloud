@@ -12,7 +12,7 @@ err = driver.End(ctx, session.ID)
 err = driver.Close(ctx)
 ```
 
-`ResolveProject` 返回可信镜像路径、已固定 commit 和 snapshot ref，且检查当前 Scope 的访问权。固定执行器是 `official/ora-space.opencode@0.6.11` 和 `official/ora-space.claude@0.4.5`，`Executor.Model.ID` 对应 `Bindings` 的 key，binding 的协议必须是该插件的协议（OpenCode 用 OpenAI chat completions，Claude Code 用 Anthropic Messages），否则 Run 返回 Unsupported。AssetsDirectory 必须是部署已校验的原生 Linux（x86_64 或 aarch64）Node、host、guardian、Deno 和固定插件包目录，架构与当前进程一致；复制可执行文件时再次校验读取的摘要，插件包按当前架构的固定 SHA-256（`nodeservices.HostOpenCodePackage` / `HostClaudePackage`）验证。
+`ResolveProject` 返回可信镜像路径、已固定 commit 和 snapshot ref，且检查当前 Scope 的访问权。固定执行器是 `official/ora-space.opencode@0.6.11` 和 `official/ora-space.claude@0.4.5`，`Executor.Model.ID` 对应 `Bindings` 的 key，binding 的协议必须是该插件的协议（OpenCode 用 OpenAI chat completions，Claude Code 用 Anthropic Messages），否则 Run 返回 Unsupported。AssetsDirectory 必须是部署已校验的原生 Linux（x86_64 或 aarch64）Node、reaper、Deno 和固定插件包目录，架构与当前进程一致；复制可执行文件时再次校验读取的摘要，插件包按当前架构的固定 SHA-256（`nodeservices.HostOpenCodePackage` / `HostClaudePackage`）验证。
 
 插件在项目 Node 上第一次被会话用到时才安装，安装与 checkout 并行，同一 Node 的会话共用一次安装；失败的安装可由下一个会话重试，超时则按 control 规则淘汰整个 Node 实例。Claude Code 是带声明的插件：安装时附带声明摘要，会话启动时附带冻结的 agent 配置（插件、目标、包摘要、声明指纹、协议和模型），由 Node 在发放模型授权前重新核对；v2 没有个人 Settings，配置为空、revision 为 0。
 
@@ -52,7 +52,7 @@ Agent 把被切断的模型请求当成网络失败原样重发（OpenCode 0.6.1
 
 项目目录使用稳定 ID 摘要，并在启动 Node 前 fsync `project-runtime.json` 登记。`New` 返回前调用 `Recover`，通过 `node.RecoverRuntime` 获取既有 runtime 锁、清理已识别的自有进程并确认没有未知残留；它不删 checkout、JSONL 或 Node SQLite。调用方须先完成此步骤，再把旧 SQL session 标为 ended/interrupted，之后才开放服务。未知目录、symlink、登记不一致或停止未确认都使启动失败。
 
-`Cleanup(ctx, root)` 和 `Driver.Cleanup(ctx)` 只在所有登记目录均确认停止后删除这些目录；未知条目会使整个操作失败且不删除。调用方必须持有整个数据目录的单进程锁。镜像仓库和 PostgreSQL 历史必须位于 Root 之外。Node socket 对路径长度有限制，Root 应放在原生 Linux 短路径中；New 会在创建目录或进程前检查包含项目目录和 guardian scope UUID 的完整 socket 路径，超限时提示缩短 `V2_DATA_DIR`。
+`Cleanup(ctx, root)` 和 `Driver.Cleanup(ctx)` 只在所有登记目录均确认停止后删除这些目录；未知条目会使整个操作失败且不删除。调用方必须持有整个数据目录的单进程锁。镜像仓库和 PostgreSQL 历史必须位于 Root 之外。Node socket 对路径长度有限制，Root 应放在原生 Linux 短路径中；New 会在创建目录或进程前检查包含项目目录的 Node 控制 socket 完整路径，超限时提示缩短 `V2_DATA_DIR`。
 
 ## 验证
 

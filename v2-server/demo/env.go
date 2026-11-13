@@ -54,10 +54,9 @@ type Environment struct {
 	Scenes []string
 }
 
-// nodeSocketSuffix is the longest path the Agent runtime puts under a data directory, a guardian
-// control socket (internal/agentruntime). A Unix socket path must stay under 108 bytes, which is
-// why the data directories live in the short ~/.od instead of #882's ~/ora-demo/data/<scene>.
-const nodeSocketSuffix = "/nodes/0000000000000000/w/h/scopes/00000000-0000-0000-0000-000000000001/control.sock"
+// nodeSocketSuffix is the longest path the Agent runtime puts under a data directory, a Node
+// control socket (internal/agentruntime). A Unix socket path must stay under 108 bytes.
+const nodeSocketSuffix = "/nodes/0000000000000000/w/n/control.sock"
 
 // environments is the table of #882: one command per scene plus the combined `task v2:demo`.
 var environments = map[string]Environment{

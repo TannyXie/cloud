@@ -32,7 +32,7 @@ go run .                               # 监听 127.0.0.1:8090
 | `V2_PLUGIN_MARKETPLACE_INTERVAL` | `5m` | 市场刷新间隔；必须为正 duration。失败时保留上一版 PostgreSQL 快照 |
 | `V2_MARKET_SOCKS_PROXY` | 未设置 | 自定义来源启用代理时使用的部署级 SOCKS5 地址；Git 与 Skill 包下载都使用，客户端只把已校验的公网 IP 交给代理 |
 | `V2_MARKET_CREDENTIAL_KEY` | 未设置 | 来源凭据的 AES-256-GCM 密钥（Base64 编码的 32 字节）；启用 S3 来源或自定义来源的 Git 认证时必须持久提供 |
-| `V2_NODE_ASSETS_DIR` | 未设置 | `task v2:node:prepare` 生成的固定 Node、host、guardian、Deno、OpenCode 和 Claude Code 资源；未设置时只启用纯模型路径 |
+| `V2_NODE_ASSETS_DIR` | 未设置 | `task v2:node:prepare` 生成的固定 Node、reaper、Deno、OpenCode 和 Claude Code 资源；未设置时只启用纯模型路径 |
 | `V2_MODEL_BASE_URL` / `V2_MODEL_API_KEY` / `V2_MODEL_NAME` | 未设置 | 可选的一组 HTTPS OpenAI 兼容 provider；必须同时设置，OpenCode 与纯模型共用，清单只公开模型名称与版本 |
 | `V2_ANTHROPIC_MODEL_BASE_URL` / `V2_ANTHROPIC_MODEL_API_KEY` / `V2_ANTHROPIC_MODEL_NAME` | 未设置 | 可选的一组 HTTPS Anthropic 兼容 provider（Messages API，base URL 写到 `/v1`，如 `https://api.anthropic.com/v1`）；必须同时提供地址、凭据和模型名，只供 Claude Code 使用。使用 Bearer 网关时以 `V2_ANTHROPIC_MODEL_AUTH_TOKEN` 代替 `V2_ANTHROPIC_MODEL_API_KEY`，二者不能同时配置；Claude Code 的 base URL 若以 `/compatible` 结尾，这里填 `/compatible/v1` |
 | `V2_MODEL_IDLE_TIMEOUT` / `V2_MODEL_MAX_DURATION` | `2m` / `30m` | 单次上游模型请求的空闲超时和总上限，两种协议共用；必须为正 duration，空闲超时不能大于总上限。连续这么久收不到上游数据、或总时长到上限时中止响应，Agent 收到的是失败而不是正常结束的流；总上限切断后这一轮不再放行重发，空闲超时切断后只放行 1 次，这一轮按失败结束并显示原因 |
@@ -71,7 +71,7 @@ key 放在仓库外的 `~/ora-demo/.env`，一台机器配一次，主目录和�
 
 每个命令依次：按上一节检查 `~/ora-demo/.env` 的 key 和 Node 资源；启动 compose PostgreSQL；删掉并重建本段的库、清空数据目录（同一段还在运行时拒绝，并按可执行文件路径停掉上次留下的 Node 进程）；用 `V2_DATABASE_URL`、`V2_DATA_DIR`、`V2_ADDR`、`V2_USERS_FILE` 启动预先编译的 v2-server；`/healthz` 就绪后运行本段的 seed；最后以 `0.0.0.0` 启动 frontend-v2。所以重跑同一个命令总是回到同一个初始状态。账号用邮箱登录，seed 完成后终端会列出来。前端端口被占用时，用 `ORA_DEMO_WEB_PORT` 换一个。
 
-数据目录没有用 #882 原定的 `~/ora-demo/data/<段>`：Agent 运行时要在数据目录下建 Unix socket，路径必须短于 108 字节，数据目录本身最多约 23 个字符，所以放在 `~/.od/<a|b|c|all>`（A、B、C 三段和合成）。主目录较长时用 `ORA_DEMO_DATA` 换一个更短的目录，太长时命令会在启动前报错。
+数据目录没有用 #882 原定的 `~/ora-demo/data/<段>`：Agent 运行时要在数据目录下建 Node 的 Unix socket，路径必须短于 108 字节，数据目录本身最多 67 个字符，所以放在短的 `~/.od/<a|b|c|all>`（A、B、C 三段和合成）。主目录较长时用 `ORA_DEMO_DATA` 换一个更短的目录，太长时命令会在启动前报错。
 
 seed 在 [`demo/`](demo/README.md)：`env.go` 是上表和重置、准备本地 Git 项目、合并用户文件的公共部分，`scenes.go` 接上三段，`lead.go` 是 B 段，`users/<段>.json` 是各段的账号（合成时合并）。同一项目第一次执行 Agent 要多等约一分钟在 Node 上安装 Agent，录屏前先在本段的项目里跑一次热身。
 

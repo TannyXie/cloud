@@ -332,7 +332,7 @@ func dataDirectory() (string, error) {
 	return root, os.MkdirAll(root, 0700)
 }
 
-// A release-built process host refuses state below a directory that group or other users can write
+// A release-built Node refuses its data below a directory that group or other users can write
 // (debug builds skip that check). Without this, every conversation fails with agent_prepare_failed
 // and nothing names the directory.
 func checkReleaseNodeDataDirectory(assets, root string) error {

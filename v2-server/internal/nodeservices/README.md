@@ -49,7 +49,7 @@ V2_NODE_ASSETS_DIR="$HOME/.cache/ora-v2-node" task v2:node:agent:test
 ```
 
 真实用例必须运行在 Linux/WSL 原生 ext4/xfs/btrfs 上；可在容器编译测试二进制，再在 WSL 执行。
-它启动真实 Node/host/guardian，完成 HTTPS clone、固定插件安装、Agent shell 工具、回答、
+它启动真实 Node（连同它拉起的 reaper），完成 HTTPS clone、固定插件安装、Agent shell 工具、回答、
 第二轮流式模型请求取消、EndSession 终态、进程清理和重启后 checkout 保留。
 接收到的 Node envelope 先写入并 fsync 临时日志，再 ACK；这是低层顺序验证，不替代 PostgreSQL 持久化。
 未设置资产目录时明确 skip，普通 CI 通过不代表真实 Agent 用例已运行。

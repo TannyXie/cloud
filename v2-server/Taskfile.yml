@@ -20,7 +20,7 @@ tasks:
         msg: Set V2_NODE_ASSETS_DIR to the prepared assets directory
     cmds: [go test -race -count=1 -run TestReal -v ./internal/nodeservices]
   node:prepare:
-    desc: Build pinned Node/host/guardian and prepare verified OpenCode and Claude Code assets on Linux
+    desc: Build pinned Node/reaper and prepare verified OpenCode and Claude Code assets on Linux
     cmds: [bash scripts/prepare-node.sh]
   node:test:
     desc: Test real Node runtime on a native Linux filesystem (requires V2_NODE_TEST_BIN_DIR)

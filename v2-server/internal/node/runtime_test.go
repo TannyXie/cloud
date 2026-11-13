@@ -62,22 +62,25 @@ func TestCleanupOnlyOwnedExecutablesAndSocketFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// The test binary stands in for the guardian: /usr/bin/sleep may be a symlink into a
-	// multi-call coreutils, which copyAsset refuses and which dispatches on argv[0].
+	// The test binary stands in for a reaper that outlived a killed Node, and for a guardian left
+	// by a root prepared before the upgrade: /usr/bin/sleep may be a symlink into a multi-call
+	// coreutils, which copyAsset refuses and which dispatches on argv[0].
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := copyAsset(testAsset(t, self), filepath.Join(root, "gb")); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"rb", "gb"} {
+		if err := copyAsset(testAsset(t, self), filepath.Join(root, name)); err != nil {
+			t.Fatal(err)
+		}
+		owned := exec.Command(filepath.Join(root, name), "-test.run=^TestSleepHelper$")
+		owned.Env = append(os.Environ(), "V2_SLEEP_HELPER=1")
+		owned.Dir = paths.Root
+		if err := owned.Start(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = owned.Process.Kill(); _ = owned.Wait() })
 	}
-	owned := exec.Command(filepath.Join(root, "gb"), "-test.run=^TestSleepHelper$")
-	owned.Env = append(os.Environ(), "V2_SLEEP_HELPER=1")
-	owned.Dir = paths.HostHome
-	if err := owned.Start(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = owned.Process.Kill(); _ = owned.Wait() })
 	other := exec.Command("/usr/bin/sleep", "60")
 	other.Dir = socketDirectory(t)
 	if err := other.Start(); err != nil {
@@ -136,13 +139,38 @@ func TestCleanupRefusesUnknownProcessInRoot(t *testing.T) {
 	}
 }
 
+// An Agent that Node was stopping can still be exiting when Node itself has gone; cleanup
+// waits for it within the grace instead of reporting a leftover.
+func TestCleanupWaitsForExitingProcessInRoot(t *testing.T) {
+	paths, lock, err := claimRoot(socketDirectory(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	exiting := exec.Command("/usr/bin/sleep", "0.3")
+	exiting.Dir = paths.Root
+	if err := exiting.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() { _ = exiting.Wait(); close(done) }()
+	t.Cleanup(func() { _ = exiting.Process.Kill(); <-done })
+	started := time.Now()
+	if err := cleanOwned(context.Background(), paths, 3*time.Second); err != nil {
+		t.Fatalf("cleanup did not wait for an exiting process: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed < 200*time.Millisecond {
+		t.Fatalf("cleanup returned after %v, before the process exited", elapsed)
+	}
+}
+
 func realRuntimeOptions(t *testing.T, root string) RuntimeOptions {
 	t.Helper()
 	bins := os.Getenv("V2_NODE_TEST_BIN_DIR")
 	if bins == "" {
 		t.Skip("set V2_NODE_TEST_BIN_DIR for real runtime tests")
 	}
-	return RuntimeOptions{Root: root, Node: testAsset(t, filepath.Join(bins, "ora-node")), Host: testAsset(t, filepath.Join(bins, "ora-process-host")), Guardian: testAsset(t, filepath.Join(bins, "ora-process-guardian")), StartupTimeout: 10 * time.Second, StopGrace: 2 * time.Second,
+	return RuntimeOptions{Root: root, Node: testAsset(t, filepath.Join(bins, "ora-node")), Reaper: testAsset(t, filepath.Join(bins, "ora-reaper")), StartupTimeout: 10 * time.Second, StopGrace: 2 * time.Second,
 		IPC: Options{ControllerID: "controller", ExpectedNodeID: "node", HeartbeatInterval: 100 * time.Millisecond, FrameTimeout: 3 * time.Second, RequiredCapabilities: []string{"plugin_install"}},
 		Configure: func(p Paths) ([]byte, error) {
 			gitconfig := filepath.Join(p.Root, "gitconfig")
@@ -151,7 +179,7 @@ func realRuntimeOptions(t *testing.T, root string) RuntimeOptions {
 			}
 			return json.Marshal(map[string]any{
 				"node":     map[string]any{"home_directory": p.NodeHome, "identity": map[string]string{"Require": "node"}, "repositories": []any{}},
-				"process":  map[string]any{"host_directory": p.HostHome, "expected_uid": os.Geteuid(), "git_program": "/usr/bin/git", "environment": map[string]string{"PATH": "/usr/bin:/bin", "HOME": p.UserHome}, "command_timeout_ms": 30000, "network_timeout_ms": 30000, "cleanup_timeout_ms": 3000, "shutdown_grace_ms": 1000},
+				"process":  map[string]any{"reaper_program": filepath.Join(p.Root, "rb"), "host_directory": p.HostHome, "expected_uid": os.Geteuid(), "git_program": "/usr/bin/git", "environment": map[string]string{"PATH": "/usr/bin:/bin", "HOME": p.UserHome}, "command_timeout_ms": 30000, "network_timeout_ms": 30000, "cleanup_timeout_ms": 3000, "shutdown_grace_ms": 1000},
 				"clone":    map[string]any{"repository_root": p.Repositories, "git_config": gitconfig, "search_path": []string{"/usr/bin"}},
 				"control":  map[string]any{"controller_id": "controller", "listen": map[string]string{"kind": "ipc", "path": p.Socket}, "heartbeat_ms": 100, "frame_timeout_ms": 3000},
 				"timezone": "Asia/Shanghai", "recovery_interval_ms": 100,
@@ -274,4 +302,62 @@ func TestRealRuntimeCleansAfterSupervisorCrash(t *testing.T) {
 		t.Fatalf("recovery heartbeat: %v %v", msg, err)
 	}
 	stopTestRuntime(t, recovered)
+}
+
+// running counts processes whose executable is root/name.
+func running(t *testing.T, root, name string) int {
+	t.Helper()
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, entry := range entries {
+		if exe, err := os.Readlink(filepath.Join("/proc", entry.Name(), "exe")); err == nil && exe == filepath.Join(root, name) {
+			n++
+		}
+	}
+	return n
+}
+
+// A root prepared before Node ran Git itself holds the process host's state directory. Node
+// deletes it on start once the host is gone, and runs with exactly one reaper of its own.
+func TestRealRuntimeRemovesRetiredHostDirectory(t *testing.T) {
+	if os.Getenv("V2_NODE_TEST_BIN_DIR") == "" {
+		t.Skip("set V2_NODE_TEST_BIN_DIR for real runtime tests")
+	}
+	opts := realRuntimeOptions(t, nativeRoot(t))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	r, err := StartRuntime(ctx, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopTestRuntime(t, r)
+	host := r.paths.HostHome
+	if err := os.MkdirAll(filepath.Join(host, "scopes"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"host.sqlite", "host.lock"} {
+		if err := os.WriteFile(filepath.Join(host, name), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r, err = StartRuntime(ctx, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stopTestRuntime(t, r) })
+	if _, err := os.Stat(host); !os.IsNotExist(err) {
+		t.Fatalf("retired host directory remains: %v", err)
+	}
+	if n := running(t, opts.Root, "rb"); n != 1 {
+		t.Fatalf("reapers = %d, want 1", n)
+	}
+	stopTestRuntime(t, r)
+	for _, name := range ownedExecutables {
+		if n := running(t, opts.Root, name); n != 0 {
+			t.Fatalf("%s still running after stop: %d", name, n)
+		}
+	}
 }

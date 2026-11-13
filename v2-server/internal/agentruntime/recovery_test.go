@@ -109,7 +109,7 @@ func TestNewFailsClosedOnUnknownRoot(t *testing.T) {
 	}
 }
 
-func TestNewRejectsLongGuardianSocketPathBeforeStarting(t *testing.T) {
+func TestNewRejectsLongNodeSocketPathBeforeStarting(t *testing.T) {
 	root := filepath.Join(t.TempDir(), strings.Repeat("x", 80))
 	_, err := New(Options{Root: root, AssetsDirectory: "/assets", GitBackend: "/git", Bindings: map[string]nodeservices.Binding{"fixture": {Model: nodeservices.Model{ID: "fixture"}, Protocol: nodeservices.OpenAICompletions, Provider: nodeservices.FixtureProvider{}}}, ResolveProject: func(context.Context, execution.Scope, string) (Project, error) { return Project{}, nil }})
 	if err == nil || !strings.Contains(err.Error(), "V2_DATA_DIR") {

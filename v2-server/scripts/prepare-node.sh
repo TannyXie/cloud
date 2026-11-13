@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Preparation is deliberately outside the demo hot path and never changes the source checkout.
-source_commit=dcff8afe418c19184f1c7dca45192911aa22d232
+source_commit=aa21210e1f8214c9eb73301132eb5c3db351aa24
 # Keep the per-architecture digests in step with internal/nodeservices/packages.go.
 [[ $(uname -s) == Linux ]] || { echo 'Preparation supports Linux x86_64 and aarch64.' >&2; exit 1; }
 case $(uname -m) in
@@ -29,7 +29,7 @@ if [[ ! -f "$source_dir/.source-commit" ]]; then
   printf '%s\n' "$source_commit" > "$source_dir/.source-commit"
 fi
 [[ $(cat "$source_dir/.source-commit") == "$source_commit" ]] || { echo 'Source marker mismatch.' >&2; exit 1; }
-# Release by default: every project runs its own Node, host and guardians, so idle cost matters more
+# Release by default: every project runs its own Node and reaper, so idle cost matters more
 # than the one-time compile. V2_NODE_PROFILE=debug trades that for a faster first build.
 profile=${V2_NODE_PROFILE:-release}
 case $profile in
@@ -37,10 +37,10 @@ case $profile in
   debug) profile_flag= ;;
   *) echo 'V2_NODE_PROFILE must be release or debug.' >&2; exit 1 ;;
 esac
-(cd "$source_dir" && cargo +1.95.0 build --locked $profile_flag -p ora-node -p ora-process-host -p ora-process-guardian)
+(cd "$source_dir" && cargo +1.95.0 build --locked $profile_flag -p ora-node -p ora-reaper)
 # Fixed modes, so the result does not depend on the caller's umask.
 install -d -m 0755 "$assets_dir" "$assets_dir/bin"
-for binary in ora-node ora-process-host ora-process-guardian; do
+for binary in ora-node ora-reaper; do
   install -m 0755 -- "$source_dir/target/$profile/$binary" "$assets_dir/bin/$binary"
 done
 install -m 0755 -- "$deno_path" "$assets_dir/bin/deno"
@@ -71,8 +71,7 @@ def asset(path):
     return {'Path': str(path), 'SHA256': digest}
 manifest = {'version': 1, 'sourceCommit': sys.argv[2], 'profile': sys.argv[4],
             'node': asset(root/'bin'/'ora-node'),
-            'host': asset(root/'bin'/'ora-process-host'),
-            'guardian': asset(root/'bin'/'ora-process-guardian'),
+            'reaper': asset(root/'bin'/'ora-reaper'),
             'deno': asset(root/'bin'/'deno'),
             'plugin': asset(root/'opencode-0.6.11.orax'),
             'claude': asset(root/'claude-0.4.5.orax')}

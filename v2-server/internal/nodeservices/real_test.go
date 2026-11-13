@@ -21,7 +21,7 @@ import (
 )
 
 // This is the real process/filesystem boundary: fixture model responses, unmodified Node,
-// Deno and OpenCode, real HTTPS clone, actual shell tool and process guardian cleanup.
+// Deno and OpenCode, real HTTPS clone, actual shell tool and reaper cleanup.
 func TestRealAgentCloneInstallToolAndEnd(t *testing.T) {
 	runRealAgent(t, "")
 }
@@ -66,7 +66,7 @@ func runRealAgent(t *testing.T, longAnswer string) {
 		return node.Asset{Path: path, SHA256: hex.EncodeToString(sum[:])}
 	}
 	ipc := node.Options{ControllerID: "controller", ExpectedNodeID: "node", HeartbeatInterval: time.Second, FrameTimeout: 10 * time.Second, RequiredCapabilities: []string{"plugin_install", "agent_session"}}
-	opts := node.RuntimeOptions{Root: filepath.Join(root, "w"), Node: asset("ora-node"), Host: asset("ora-process-host"), Guardian: asset("ora-process-guardian"), IPC: ipc, StartupTimeout: 15 * time.Second, StopGrace: 2 * time.Second, Configure: func(p node.Paths) ([]byte, error) {
+	opts := node.RuntimeOptions{Root: filepath.Join(root, "w"), Node: asset("ora-node"), Reaper: asset("ora-reaper"), IPC: ipc, StartupTimeout: 15 * time.Second, StopGrace: 2 * time.Second, Configure: func(p node.Paths) ([]byte, error) {
 		return s.NodeConfiguration(p, ipc, filepath.Join(assets, "bin", "deno"))
 	}}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -97,10 +97,8 @@ func runRealAgent(t *testing.T, longAnswer string) {
 	sawTruncation := false
 	t.Cleanup(func() {
 		if t.Failed() {
-			for _, name := range []string{"nb.log", "hb.log"} {
-				data, _ := os.ReadFile(filepath.Join(opts.Root, name))
-				t.Logf("%s: %s", name, data)
-			}
+			data, _ := os.ReadFile(filepath.Join(opts.Root, "nb.log"))
+			t.Logf("nb.log: %s", data)
 		}
 	})
 	send := func(kind, execution string, payload any) {
@@ -263,8 +261,8 @@ func runRealAgent(t *testing.T, longAnswer string) {
 	}
 	t.Log("second turn cancellation closed the in-flight model request")
 	stop()
-	// Stop confirms no owned executable or unknown cwd remains. A second start further proves
-	// host recovery is usable and the tool result survives normal cleanup.
+	// Stop confirms no owned executable, the reaper included, or unknown cwd remains. A second
+	// start further proves Node recovery is usable and the tool result survives normal cleanup.
 	r, err = node.StartRuntime(ctx, opts)
 	if err != nil {
 		t.Fatal(err)
@@ -273,7 +271,7 @@ func runRealAgent(t *testing.T, longAnswer string) {
 		t.Fatalf("restart lost checkout: %v", err)
 	}
 	stop()
-	t.Log("EndSession, guardian cleanup and host restart passed; checkout preserved")
+	t.Log("EndSession, reaper cleanup and Node restart passed; checkout preserved")
 	if evidence != nil {
 		// Verify after the Node restart, close the database connection and discard the source
 		// history so the read cannot accidentally fall back to the still-existing JSONL file.

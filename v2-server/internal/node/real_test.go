@@ -14,14 +14,14 @@ import (
 )
 
 // TestRealNodeHandshake uses unmodified pinned Node binaries. It verifies transport and clean
-// idle process shutdown only; clone/install/Agent and guardian cleanup need the M2 integration.
+// idle process shutdown only; clone/install/Agent and reaper cleanup need the M2 integration.
+// Node starts the ora-reaper installed next to it in V2_NODE_TEST_BIN_DIR.
 func TestRealNodeHandshake(t *testing.T) {
 	bins := os.Getenv("V2_NODE_TEST_BIN_DIR")
 	if bins == "" {
 		t.Skip("set V2_NODE_TEST_BIN_DIR for the real Node boundary test")
 	}
-	// Host state must be on ext4/xfs/btrfs, not a container overlay or a Windows mount.
-	// A short native Linux home also leaves room for guardian socket suffixes.
+	// A short native Linux home keeps the control socket under the Unix socket path limit.
 	base, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatal(err)
@@ -38,14 +38,6 @@ func TestRealNodeHandshake(t *testing.T) {
 	}
 	gitconfig := filepath.Join(root, "gitconfig")
 	if err := os.WriteFile(gitconfig, []byte(""), 0600); err != nil {
-		t.Fatal(err)
-	}
-	guardian := filepath.Join(root, "guardian")
-	data, err := os.ReadFile(filepath.Join(bins, "ora-process-guardian"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(guardian, data, 0700); err != nil {
 		t.Fatal(err)
 	}
 	start := func(name string, args ...string) func() {
@@ -94,24 +86,19 @@ func TestRealNodeHandshake(t *testing.T) {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		for _, name := range []string{"ora-node", "ora-process-host"} {
-			b, _ := os.ReadFile(filepath.Join(root, name+".log"))
-			t.Logf("%s: %s", name, b)
-		}
+		b, _ := os.ReadFile(filepath.Join(root, "ora-node.log"))
+		t.Logf("ora-node: %s", b)
 		t.Fatalf("socket not ready: %s", path)
 	}
-	hostDir := filepath.Join(root, "host")
-	stopHost := start("ora-process-host", "create", hostDir, guardian)
-	waitSocket(filepath.Join(hostDir, "host.sock"))
 	socket := filepath.Join(root, "node", "control.sock")
 	config := map[string]any{
 		"node":     map[string]any{"home_directory": filepath.Join(root, "node"), "identity": map[string]string{"Require": "node"}, "repositories": []any{}},
-		"process":  map[string]any{"host_directory": hostDir, "expected_uid": os.Geteuid(), "git_program": "/usr/bin/git", "environment": map[string]string{"PATH": "/usr/bin:/bin", "HOME": filepath.Join(root, "user-home")}, "command_timeout_ms": 30000, "network_timeout_ms": 30000, "cleanup_timeout_ms": 3000, "shutdown_grace_ms": 2000},
+		"process":  map[string]any{"git_program": "/usr/bin/git", "environment": map[string]string{"PATH": "/usr/bin:/bin", "HOME": filepath.Join(root, "user-home")}, "command_timeout_ms": 30000, "network_timeout_ms": 30000, "cleanup_timeout_ms": 3000, "shutdown_grace_ms": 2000},
 		"clone":    map[string]any{"repository_root": filepath.Join(root, "repositories"), "git_config": gitconfig, "search_path": []string{"/usr/bin"}},
 		"control":  map[string]any{"controller_id": "controller", "listen": map[string]string{"kind": "ipc", "path": socket}, "heartbeat_ms": 100, "frame_timeout_ms": 3000},
 		"timezone": "Asia/Shanghai", "recovery_interval_ms": 100,
 	}
-	data, err = json.Marshal(config)
+	data, err := json.Marshal(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,5 +124,4 @@ func TestRealNodeHandshake(t *testing.T) {
 	t.Logf("real Node identity: %+v", client.Identity())
 	client.Close()
 	stopNode()
-	stopHost()
 }

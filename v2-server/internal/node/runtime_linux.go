@@ -19,18 +19,22 @@ import (
 // ErrRuntimeBusy means another supervisor still owns this Workspace runtime root.
 var ErrRuntimeBusy = errors.New("workspace runtime already owned")
 
-// Paths are private, short, stable locations within one Workspace's runtime root.
+// Paths are private, short, stable locations within one Workspace's runtime root. HostHome is
+// where the retired process host kept its state; Node deletes it once the old host has stopped.
 type Paths struct{ Root, NodeHome, HostHome, Repositories, UserHome, Config, Socket string }
+
+// ControlSocket is Node's control socket, the longest path the runtime binds under root.
+func ControlSocket(root string) string { return filepath.Join(root, "n", "control.sock") }
 
 // RuntimeOptions contains trusted deployment inputs, not HTTP request values. Configure must
 // produce Node configuration using the supplied paths and the same identity/timing as IPC.
 type RuntimeOptions struct {
-	Root                 string
-	Node, Host, Guardian Asset
-	IPC                  Options
-	Configure            func(Paths) ([]byte, error)
-	StartupTimeout       time.Duration
-	StopGrace            time.Duration
+	Root           string
+	Node, Reaper   Asset
+	IPC            Options
+	Configure      func(Paths) ([]byte, error)
+	StartupTimeout time.Duration
+	StopGrace      time.Duration
 }
 
 type child struct {
@@ -39,20 +43,21 @@ type child struct {
 	err  error
 }
 
-// Runtime owns Node, process host, its IPC client and a cross-process Workspace lock.
+// Runtime owns Node, its IPC client and a cross-process Workspace lock. Node starts the reaper
+// itself; the reaper outlives a killed Node only briefly, and cleanup stops it by executable path.
 // A process exit or IPC failure closes Done; consumers mark affected work interrupted, never
 // replay it.
 // Stop terminates the runtime, so callers normally EndSession first to retain its final events.
 type Runtime struct {
-	Client     *Client
-	paths      Paths
-	lock       *os.File
-	node, host *child
-	grace      time.Duration
-	mu         sync.Mutex
-	stopped    bool
-	done       chan struct{}
-	watchStop  chan struct{}
+	Client    *Client
+	paths     Paths
+	lock      *os.File
+	node      *child
+	grace     time.Duration
+	mu        sync.Mutex
+	stopped   bool
+	done      chan struct{}
+	watchStop chan struct{}
 }
 
 // StartRuntime recovers leftovers before spawning anything. A failed cleanup keeps the root
@@ -77,7 +82,7 @@ func StartRuntime(ctx context.Context, opts RuntimeOptions) (_ *Runtime, resultE
 	if err := cleanOwned(ctx, paths, opts.StopGrace); err != nil {
 		return nil, err
 	}
-	for name, asset := range map[string]Asset{"nb": opts.Node, "hb": opts.Host, "gb": opts.Guardian} {
+	for name, asset := range map[string]Asset{"nb": opts.Node, "rb": opts.Reaper} {
 		if err := copyAsset(asset, filepath.Join(paths.Root, name)); err != nil {
 			return nil, fmt.Errorf("prepare %s: %w", name, err)
 		}
@@ -96,19 +101,6 @@ func StartRuntime(ctx context.Context, opts RuntimeOptions) (_ *Runtime, resultE
 	}
 	startup, cancel := context.WithTimeout(ctx, opts.StartupTimeout)
 	defer cancel()
-	mode := "create"
-	if _, err := os.Stat(paths.HostHome); err == nil {
-		mode = "recover"
-	} else if !os.IsNotExist(err) {
-		return nil, err
-	}
-	r.host, err = startChild(filepath.Join(paths.Root, "hb"), paths, mode, paths.HostHome, filepath.Join(paths.Root, "gb"))
-	if err != nil {
-		return nil, err
-	}
-	if err := waitSocket(startup, filepath.Join(paths.HostHome, "host.sock"), r.host); err != nil {
-		return nil, err
-	}
 	r.node, err = startChild(filepath.Join(paths.Root, "nb"), paths, paths.Config)
 	if err != nil {
 		return nil, err
@@ -124,7 +116,6 @@ func StartRuntime(ctx context.Context, opts RuntimeOptions) (_ *Runtime, resultE
 	go func() {
 		select {
 		case <-r.node.done:
-		case <-r.host.done:
 		case <-r.Client.done:
 		case <-r.watchStop:
 		}
@@ -134,7 +125,7 @@ func StartRuntime(ctx context.Context, opts RuntimeOptions) (_ *Runtime, resultE
 	return r, nil
 }
 
-// Done closes when either child exits, the IPC transport fails, or Stop completes its shutdown.
+// Done closes when Node exits, the IPC transport fails, or Stop completes its shutdown.
 // A failed transport is never redialled; callers Stop and start the runtime again.
 func (r *Runtime) Done() <-chan struct{} { return r.done }
 
@@ -159,38 +150,43 @@ func (r *Runtime) stopProcesses(ctx context.Context) error {
 	if r.Client != nil {
 		_ = r.Client.Close()
 	}
-	for _, p := range []*child{r.node, r.host} {
-		if p == nil {
-			continue
-		}
-		select {
-		case <-p.done:
-			continue
-		default:
-		}
-		_ = p.cmd.Process.Signal(syscall.SIGTERM)
-		timer := time.NewTimer(r.grace)
-		select {
-		case <-p.done:
-			timer.Stop()
-		case <-timer.C:
-			_ = p.cmd.Process.Kill()
-			select {
-			case <-p.done:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		}
+	if err := stopChild(ctx, r.node, r.grace); err != nil {
+		return err
 	}
 	return cleanOwned(ctx, r.paths, r.grace)
 }
 
+func stopChild(ctx context.Context, p *child, grace time.Duration) error {
+	if p == nil {
+		return nil
+	}
+	select {
+	case <-p.done:
+		return nil
+	default:
+	}
+	_ = p.cmd.Process.Signal(syscall.SIGTERM)
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	select {
+	case <-p.done:
+		return nil
+	case <-timer.C:
+		_ = p.cmd.Process.Kill()
+		select {
+		case <-p.done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func claimRoot(root string) (Paths, *os.File, error) {
-	if !filepath.IsAbs(root) || filepath.Clean(root) != root || len(filepath.Join(root, "h", "scopes", "00000000-0000-0000-0000-000000000001", "control.sock")) >= 108 {
-		return Paths{}, nil, errors.New("runtime root must be absolute, clean and fit guardian socket paths")
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root || len(ControlSocket(root)) >= 108 {
+		return Paths{}, nil, errors.New("runtime root must be absolute, clean and fit the Node control socket path")
 	}
 	if err := os.Mkdir(root, 0700); err != nil && !os.IsExist(err) {
 		return Paths{}, nil, err
@@ -244,7 +240,7 @@ func claimRoot(root string) (Paths, *os.File, error) {
 		lock.Close()
 		return Paths{}, nil, errors.New("unsupported runtime ownership marker")
 	}
-	paths := Paths{Root: root, NodeHome: filepath.Join(root, "n"), HostHome: filepath.Join(root, "h"), Repositories: filepath.Join(root, "r"), UserHome: filepath.Join(root, "u"), Config: filepath.Join(root, "config.json"), Socket: filepath.Join(root, "n", "control.sock")}
+	paths := Paths{Root: root, NodeHome: filepath.Join(root, "n"), HostHome: filepath.Join(root, "h"), Repositories: filepath.Join(root, "r"), UserHome: filepath.Join(root, "u"), Config: filepath.Join(root, "config.json"), Socket: ControlSocket(root)}
 	return paths, lock, nil
 }
 
