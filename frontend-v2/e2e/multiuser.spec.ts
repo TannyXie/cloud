@@ -51,7 +51,7 @@ test('an address nobody presetted or invited cannot sign in', async ({ page }) =
   await page.getByLabel('邮箱').fill(newAddress())
   await page.getByRole('button', { name: '登录', exact: true }).click()
   await expect(
-    page.getByText('该邮箱不在演示团队中，请让 owner 邀请后再登录。'),
+    page.getByText('该邮箱不在演示团队中，请让管理员邀请后再登录。'),
   ).toBeVisible()
   await expect(page.getByRole('heading', { name: '登录 Ora' })).toBeVisible()
 })

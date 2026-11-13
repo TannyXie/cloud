@@ -436,7 +436,7 @@ export default function PluginsPage() {
       >
         {!market.canManage && (
           <p className="text-sm text-muted-foreground">
-            当前账号为只读成员；安装与移除需要工作区 owner 权限。
+            当前账号为只读成员；安装与移除需要工作区管理员权限。
           </p>
         )}
         <p className="text-sm text-muted-foreground">

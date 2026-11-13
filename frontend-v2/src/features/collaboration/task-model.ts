@@ -121,7 +121,7 @@ export function taskRunMessageFor(error: unknown): string {
 /** A refused manual move: the run's own reason when it owns the status, else the task's. */
 export function taskMoveMessageFor(error: unknown): string {
   // Only ending a task answers 403 here: a caller outside the workspace gets 404.
-  if (statusOf(error) === 403) return '只有任务创建人或工作区 owner 能确认完成或取消任务。'
+  if (statusOf(error) === 403) return '只有任务创建人或工作区管理员能确认完成或取消任务。'
   const message = taskRunMessageFor(error)
   return message === '操作失败，请重试。' ? taskMessageFor(error) : message
 }

@@ -12,7 +12,7 @@ const errors: Record<string, string> = {
   user_unavailable: '这个账号已停用，无法邀请。',
   invalid_email: '邮箱格式不正确。',
   invalid_display_name: '显示名最多 64 个字。',
-  forbidden: '只有 owner 可以邀请成员。',
+  forbidden: '只有管理员可以邀请成员。',
   not_found: '工作空间不存在或已归档。',
 }
 

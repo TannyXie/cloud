@@ -166,7 +166,7 @@ it('lets a member browse the catalog but not change it', async () => {
   const row = await screen.findByRole('article', { name: '写作工具箱' })
   expect(within(row).getByRole('button', { name: '安装' })).toBeDisabled()
   expect(
-    screen.getByText(/安装与移除需要工作区 owner 权限/),
+    screen.getByText(/安装与移除需要工作区管理员权限/),
   ).toBeInTheDocument()
 })
 
