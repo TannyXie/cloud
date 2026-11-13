@@ -33,6 +33,13 @@ const reviewing = marketplaceEntry('reviewing', {
   readme: '# review\n\n代码审查，用于说明同名冲突。',
 })
 
+const pocock = marketplaceEntry('mattpocock.skills', {
+  kind: 'skill',
+  title: 'Matt Pocock Skills',
+  readme:
+    '# Matt Pocock Skills\n\n## Included skills\n\n- tdd\n- code-review\n- prototype\n',
+})
+
 const skillFile = (
   name: string,
   description = '导入的技能',
@@ -45,6 +52,18 @@ const skillFile = (
   )
 
 beforeEach(() => localStorage.clear())
+
+it('marks a user skill shadowed by a bundled market Skill name', async () => {
+  installMarketplaceBackend({
+    catalog: [pocock],
+    selections: [marketplaceSelection(pocock)],
+    skills: [serverSkill({ id: '00000000-0000-4000-8000-000000000802', name: 'tdd' })],
+  })
+  renderSettingsPage(<SkillsPage />)
+  expect(
+    await screen.findByText(/与本空间已安装的市场 Skill「tdd」同名/),
+  ).toBeInTheDocument()
+})
 
 it('marks a user skill whose name an installed market Skill takes', async () => {
   installMarketplaceBackend({

@@ -98,6 +98,28 @@ function pluginSkillName(entry: PluginCatalogEntry): string {
   return heading || entry.identifier
 }
 
+/**
+ * Skill names a market package materializes at runtime. A package may bundle several skills (for
+ * example the Matt Pocock collection); the runtime projects each bundled skill by its own name, so
+ * the readme's "Included skills" list is the closest static source for those names.
+ */
+function bundledSkillNames(readme: string | null): string[] {
+  if (!readme) return []
+  const names: string[] = []
+  let inSection = false
+  for (const raw of readme.split('\n')) {
+    const line = raw.trim()
+    if (/^#{1,6}\s/.test(line)) {
+      inSection = /^#{1,6}\s+included skills\b/i.test(line)
+      continue
+    }
+    if (!inSection) continue
+    const item = line.match(/^[-*]\s+([A-Za-z0-9][A-Za-z0-9._-]*)\s*$/)
+    if (item) names.push(item[1])
+  }
+  return names
+}
+
 /** Names of market Skills already installed in this space, keyed by the user-visible skill name. */
 function installedMarketSkillNames(
   catalog: PluginCatalogEntry[],
@@ -106,9 +128,9 @@ function installedMarketSkillNames(
   const names = new Map<string, string>()
   for (const entry of catalog) {
     if (entry.kind !== 'skill') continue
-    if (selection(entry)?.desiredState === 'installed') {
-      names.set(pluginSkillName(entry), pluginSkillName(entry))
-    }
+    if (selection(entry)?.desiredState !== 'installed') continue
+    names.set(pluginSkillName(entry), pluginSkillName(entry))
+    for (const name of bundledSkillNames(entry.readme)) names.set(name, name)
   }
   return names
 }
