@@ -1143,14 +1143,17 @@ function WorkflowEditorContent({
 
   /** Switches the active workflow after flushing any pending draft write. */
   async function selectWorkflow(workflowId: string): Promise<void> {
-    if (workflowId === resolvedWorkflowId) {
-      return;
-    }
-    // Only the latest pick wins. Two flushes can overlap when the sidebar is clicked again before
-    // the previous one resolves; without this the selection would follow whichever save returned
-    // last, not the row the user picked last.
+    // Claim the switch before checking the target: when the user picks B and then picks A (the
+    // current row) again, the second pick must cancel the in-flight switch to B, not return early
+    // and let B apply. Only the latest pick wins.
     const generation = ++workflowSwitchGeneration.current;
     const isLatest = () => generation === workflowSwitchGeneration.current;
+    if (workflowId === resolvedWorkflowId) {
+      // Back on the row already open: cancel any in-flight switch and stay put. The generation
+      // bump above makes the older switch's flush stale, so it will not re-apply its selection.
+      setSwitchingWorkflow(false);
+      return;
+    }
     setSwitchingWorkflow(true);
     const saved = await autosave.flush({ force: true }).catch(() => false);
     if (!isLatest()) {
@@ -1184,6 +1187,9 @@ function WorkflowEditorContent({
       // Skip selectWorkflow's forced flush — the previous draft was already written
       // above, and flushing again would race the newly created workflow's hydrate.
       autosave.cancel();
+      // A create wins over any in-flight switch: bump the token so the older switch's flush,
+      // when it returns, does not overwrite this selection.
+      workflowSwitchGeneration.current += 1;
       setPreviewedVersion(null);
       setHydratedWorkflowId(null);
       setWorkflow(null);
@@ -1208,6 +1214,7 @@ function WorkflowEditorContent({
         copyName: (name) => t("settings.workflow.copyName", { name }),
       });
       autosave.cancel();
+      workflowSwitchGeneration.current += 1;
       setPreviewedVersion(null);
       setSelectedWorkflowId(result.workflow.id);
       toast.success(
@@ -1406,6 +1413,7 @@ function WorkflowEditorContent({
         }),
       });
       autosave.cancel();
+      workflowSwitchGeneration.current += 1;
       setPreviewedVersion(null);
       setHydratedWorkflowId(null);
       setWorkflow(null);

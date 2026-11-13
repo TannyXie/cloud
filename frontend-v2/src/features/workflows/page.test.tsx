@@ -256,6 +256,36 @@ describe("workflow page", () => {
     expect(editor).not.toHaveAttribute("inert");
   });
 
+  it("stays on the current workflow when it is re-picked during an in-flight switch", async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await screen.findByDisplayValue("示例：代码审查");
+    const gates: Array<() => void> = [];
+    const answer = http.defaults.adapter as AxiosAdapter;
+    http.defaults.adapter = async (config) => {
+      if (config.method?.toUpperCase() === "PUT" && config.url?.endsWith("/draft")) {
+        await new Promise<void>((resolve) => gates.push(resolve));
+      }
+      return answer(config);
+    };
+
+    // A → B: the switch to B is blocked on its draft write.
+    await user.click(within(library()).getByRole("button", { name: "示例：逐段翻译" }));
+    const editor = screen.getByRole("main");
+    await waitFor(() => expect(editor).toHaveAttribute("inert"));
+    expect(gates.length).toBe(1);
+
+    // A → B → A: picking the currently open row again must cancel the in-flight switch to B.
+    await user.click(within(library()).getByRole("button", { name: "示例：代码审查" }));
+    await waitFor(() => expect(editor).not.toHaveAttribute("inert"));
+
+    // Release B's save; its selection is stale (the user picked A), so A stays.
+    gates[0]();
+    expect(await screen.findByDisplayValue("示例：代码审查")).toBeInTheDocument();
+    expect(editor).not.toHaveAttribute("inert");
+    expect(screen.queryByDisplayValue("示例：逐段翻译")).not.toBeInTheDocument();
+  });
+
   it("keeps workflows across a reload of the page", async () => {
     const user = userEvent.setup();
     const first = await renderPage();
