@@ -5,6 +5,7 @@ package agentruntime
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,7 +64,9 @@ func TestAttachUserSkillsReportsCatalogFailure(t *testing.T) {
 	}
 }
 
-func TestAttachUserSkillsRejectsInstalledPluginNameConflict(t *testing.T) {
+// A user skill whose name a market-installed Skill already takes is skipped: the market version
+// wins and the session still starts (it never fails on the name).
+func TestAttachUserSkillsSkipsInstalledPluginNameConflict(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "market-skills.json"), []byte(
 		`[{"ID":"official/mattpocock.skills","Version":"1.3.1","Name":"code-review"}]`,
@@ -75,9 +78,14 @@ func TestAttachUserSkillsRejectsInstalledPluginNameConflict(t *testing.T) {
 			return []UserSkill{{Name: "code-review", Description: "mine", Content: "# Review"}}, nil
 		},
 	}}}
-	err := p.attachUserSkills(context.Background(), t.TempDir(), execution.Scope{TenantID: "tenant", UserID: "user"})
-	var conflict *userSkillConflictError
-	if !errors.As(err, &conflict) || conflict.Name != "code-review" {
-		t.Fatalf("error = %v, want code-review userSkillConflictError", err)
+	checkout := t.TempDir()
+	if err := p.attachUserSkills(context.Background(), checkout, execution.Scope{TenantID: "tenant", UserID: "user"}); err != nil {
+		t.Fatalf("attachUserSkills = %v, want nil", err)
+	}
+	if _, err := os.Lstat(filepath.Join(checkout, ".opencode", "skills", "code-review")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("conflicting user skill was written: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(checkout, ".claude", "skills", "code-review")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("conflicting user skill was written to .claude: %v", err)
 	}
 }

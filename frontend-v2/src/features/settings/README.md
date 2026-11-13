@@ -37,7 +37,7 @@ localStorage，再更新 TanStack Query 缓存。schema 2、3、4 的旧快照�
   生成，只读，安装或移除来源插件会改变可用性，移除后仍能预览文档。预览不执行 HTML 或加载远程图片。
 - 用户技能在新 Agent 会话克隆工作副本后物化到 `.opencode/skills/<name>/SKILL.md` 与
   `.claude/skills/<name>/SKILL.md`。项目已有同名目录时保留项目内容；市场 Skill 与用户技能
-  同名时会话以 `skill_name_conflict` 失败，提示用户改名，不覆盖也不静默丢弃任何一方；
+  同名时市场优先：用户技能不写入、会话照常启动，列表和详情会标记这只技能并提示改名；
   编辑或删除只影响之后
   启动的会话。
 - 角色复用 desktop 的 Agent definition 形状：名称、描述和 Markdown 内容，使用 `local`

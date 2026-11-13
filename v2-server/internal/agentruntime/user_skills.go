@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -14,15 +15,9 @@ import (
 	"github.com/wanglongan587/cloud/v2-server/internal/skilldoc"
 )
 
-type userSkillConflictError struct{ Name string }
-
-func (e *userSkillConflictError) Error() string {
-	return fmt.Sprintf("user skill %q conflicts with an installed plugin skill", e.Name)
-}
-
 // attachUserSkills projects the session owner's catalog into the two discovery roots Agents read.
-// Existing project-owned paths win; a market link with the same name is a conflict, so neither
-// side is silently dropped.
+// A market-installed Skill with the same name takes precedence (project skills > market > user):
+// the user skill is skipped so the session still starts, and only a log line carries its name.
 func (p *projectRuntime) attachUserSkills(ctx context.Context, checkout string, scope execution.Scope) error {
 	if p.driver.opts.UserSkills == nil {
 		return nil
@@ -44,10 +39,14 @@ func (p *projectRuntime) attachUserSkills(ctx context.Context, checkout string, 
 	for _, link := range links {
 		marketNames[link.Name] = true
 	}
+	projected := make([]UserSkill, 0, len(skills))
 	for _, skill := range skills {
 		if marketNames[skill.Name] {
-			return &userSkillConflictError{Name: skill.Name}
+			slog.Info("skip user skill: name is taken by an installed market Skill",
+				"skill", skill.Name, "scope", fmt.Sprintf("%s:%s", scope.TenantID, scope.UserID))
+			continue
 		}
+		projected = append(projected, skill)
 	}
 	root, err := os.OpenRoot(checkout)
 	if err != nil {
@@ -59,7 +58,7 @@ func (p *projectRuntime) attachUserSkills(ctx context.Context, checkout string, 
 		if !ensureSkillDir(root, base) || !ensureSkillDir(root, base+"/skills") {
 			continue
 		}
-		for _, skill := range skills {
+		for _, skill := range projected {
 			dir := base + "/skills/" + skill.Name
 			wrote, err := writeUserSkill(root, dir, skill)
 			if err != nil {

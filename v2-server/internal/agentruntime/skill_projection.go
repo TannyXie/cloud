@@ -5,6 +5,7 @@ package agentruntime
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -56,6 +57,9 @@ func (p *projectRuntime) discover(id, version string) ([]skillLink, error) {
 type linkChange struct {
 	root           *os.Root
 	name, old, new string
+	// replaceTree removes an existing real directory (a service-written user skill) before writing
+	// the market symlink; `old` is empty in that case because there is no previous symlink target.
+	replaceTree bool
 }
 
 // Only links owned by this service may be replaced. A project-authored skill, directory
@@ -108,16 +112,26 @@ func (p *projectRuntime) projectSkills(checkouts []string, old, next []skillLink
 			for n := range names {
 				name := base + "/skills/" + n
 				target, e := root.Readlink(name)
+				replacingTree := false
 				if errors.Is(e, fs.ErrNotExist) {
 					target = ""
 				} else if e != nil {
-					return errors.New("project already owns skill path")
+					// The path exists but is not a service symlink (e.g. a real directory). Only a
+					// path the service itself wrote — one listed under its own exclude header — may be
+					// replaced by a market link; anything project-owned keeps the conflict, named so
+					// the user can find the skill.
+					if serviceExcludedPath(root, name) {
+						target = ""
+						replacingTree = true
+					} else {
+						return fmt.Errorf("project already owns skill path %s", n)
+					}
 				}
 				if target != "" && target != before[n] && target != after[n] {
-					return errors.New("project skill path conflict")
+					return fmt.Errorf("project skill path conflict for %s", n)
 				}
 				if target != after[n] {
-					changes = append(changes, linkChange{root, name, target, after[n]})
+					changes = append(changes, linkChange{root, name, target, after[n], replacingTree})
 				}
 				if after[n] != "" {
 					owned[root] = append(owned[root], name)
@@ -126,7 +140,13 @@ func (p *projectRuntime) projectSkills(checkouts []string, old, next []skillLink
 		}
 	}
 	for _, c := range changes {
-		if c.old != "" {
+		if c.replaceTree {
+			// A service-written user skill directory yields to the market link; remove the tree
+			// (not just the path) so the symlink below does not collide with a non-empty dir.
+			if e := c.root.RemoveAll(c.name); e != nil {
+				return e
+			}
+		} else if c.old != "" {
 			if e := c.root.Remove(c.name); e != nil {
 				return e
 			}

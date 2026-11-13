@@ -77,3 +77,29 @@ func escapeGitPattern(p string) string {
 	}
 	return b.String()
 }
+
+// serviceExcludedPath reports whether `path` is listed under the service's own header in the
+// checkout's `.git/info/exclude`. A real directory that only the service wrote (a previously
+// materialized user skill) lands here, so a later market install may replace it; a project-owned
+// path never does.
+func serviceExcludedPath(root *os.Root, path string) bool {
+	existing, err := root.ReadFile(".git/info/exclude")
+	if err != nil {
+		return false
+	}
+	lines := strings.Split(string(existing), "\n")
+	inside := false
+	for _, line := range lines {
+		if line == excludeHeader {
+			inside = true
+			continue
+		}
+		if !inside {
+			continue
+		}
+		if strings.HasPrefix(line, "/") && strings.TrimSuffix(line, "\r") == "/"+escapeGitPattern(path) {
+			return true
+		}
+	}
+	return false
+}

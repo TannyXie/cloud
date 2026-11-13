@@ -112,3 +112,54 @@ func TestEscapeGitPattern(t *testing.T) {
 		t.Fatal("escaped a plain name")
 	}
 }
+
+// A real directory that only the service wrote (registered under its own exclude header, e.g. a
+// previously materialized user skill) yields to a same-named market Skill: the tree is removed and
+// the market link written in its place.
+func TestProjectSkillsReplacesMaterializedUserSkillTree(t *testing.T) {
+	checkout := t.TempDir()
+	dir := filepath.Join(checkout, ".opencode", "skills", "code-review")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("old user skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(checkout, ".git", "info"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(checkout, ".git", "info", "exclude"),
+		[]byte(excludeHeader+"\n/.opencode/skills/code-review\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	market := skillLink{ID: "official/mattpocock.skills", Version: "1.3.1", Name: "code-review"}
+	p := &projectRuntime{root: t.TempDir(), driver: &Driver{opts: Options{}}}
+	if err := p.projectSkills([]string{checkout}, nil, []skillLink{market}); err != nil {
+		t.Fatalf("projectSkills = %v, want nil", err)
+	}
+	root, err := os.OpenRoot(checkout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if target, err := root.Readlink(".opencode/skills/code-review"); err != nil || target != p.assetPath(market) {
+		t.Fatalf("market link = %q, %v; want %q", target, err, p.assetPath(market))
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("old user skill tree still present: %v", err)
+	}
+}
+
+// A project-owned skill (committed in git, not listed under the service's exclude header) that a
+// market Skill would shadow keeps its path: the projection fails and names the skill.
+func TestProjectSkillsKeepsProjectOwnedNameConflict(t *testing.T) {
+	checkout := gitCheckout(t)
+	p := &projectRuntime{root: t.TempDir(), driver: &Driver{opts: Options{}}}
+	err := p.projectSkills([]string{checkout}, nil, []skillLink{{ID: "acme/tools", Version: "1.0.0", Name: "owned"}})
+	if err == nil || !strings.Contains(err.Error(), "owned") {
+		t.Fatalf("projectSkills error = %v, want a conflict naming the owned skill", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(checkout, ".claude", "skills", "owned", "SKILL.md")); statErr != nil {
+		t.Fatalf("project-owned skill was removed: %v", statErr)
+	}
+}

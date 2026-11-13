@@ -57,6 +57,8 @@ type SkillRow = {
   local?: ServerSkill
   entry?: PluginCatalogEntry
   selection?: SpacePlugin
+  /** Present when an installed market Skill takes this name: the market version wins at runtime. */
+  shadowedByMarket?: string
 }
 
 /** Aggregates one selection's project receipts into a single visible state. */
@@ -94,6 +96,21 @@ function skillStatus(skill: SkillRow, detail = false) {
 function pluginSkillName(entry: PluginCatalogEntry): string {
   const heading = entry.readme?.match(/^#\s+(.+)$/m)?.[1]?.trim()
   return heading || entry.identifier
+}
+
+/** Names of market Skills already installed in this space, keyed by the user-visible skill name. */
+function installedMarketSkillNames(
+  catalog: PluginCatalogEntry[],
+  selection: (entry: PluginCatalogEntry) => SpacePlugin | undefined,
+): Map<string, string> {
+  const names = new Map<string, string>()
+  for (const entry of catalog) {
+    if (entry.kind !== 'skill') continue
+    if (selection(entry)?.desiredState === 'installed') {
+      names.set(pluginSkillName(entry), pluginSkillName(entry))
+    }
+  }
+  return names
 }
 
 function localSkillRows(skills: ServerSkill[]): SkillRow[] {
@@ -179,7 +196,10 @@ export default function SkillsPage() {
     return selection ? deployments.byKey.get(pluginKey(selection)) : undefined
   }
   const skills: SkillRow[] = [
-    ...localSkillRows(local.skills),
+    ...localSkillRows(local.skills).map((skill) => {
+      const marketName = installedMarketSkillNames(market.catalog, market.selection).get(skill.name)
+      return marketName ? { ...skill, shadowedByMarket: marketName } : skill
+    }),
     ...pluginSkillRows(market.catalog, market.selection, deploymentOf),
   ].map((skill) =>
     skill.entry
@@ -405,6 +425,12 @@ export default function SkillsPage() {
                   <span className="settings-resource-description block">
                     {skill.description || '暂无简介'}
                   </span>
+                  {skill.shadowedByMarket && (
+                    <span className="settings-resource-description block text-amber-600">
+                      与本空间已安装的市场 Skill「{skill.shadowedByMarket}
+                      」同名，在这里不生效，使用的是市场版本，可以改名
+                    </span>
+                  )}
                   <span className="settings-resource-meta">
                     <span>
                       {skill.source.kind === 'local'
@@ -513,6 +539,12 @@ export default function SkillsPage() {
                 ? '用户技能 · 服务端'
                 : '市场技能 · 只读'}
             </Badge>
+            {selected.shadowedByMarket && (
+              <p className="text-sm text-amber-600">
+                与本空间已安装的市场 Skill「{selected.shadowedByMarket}
+                」同名，在这里不生效，使用的是市场版本，可以改名。
+              </p>
+            )}
             {selected.local ? (
               <div className="flex gap-2">
                 <Button

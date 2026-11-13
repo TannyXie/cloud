@@ -28,6 +28,11 @@ const serverSkill = (overrides: Partial<Skill> = {}): Skill => ({
   ...overrides,
 })
 
+const reviewing = marketplaceEntry('reviewing', {
+  kind: 'skill',
+  readme: '# review\n\n代码审查，用于说明同名冲突。',
+})
+
 const skillFile = (
   name: string,
   description = '导入的技能',
@@ -40,6 +45,25 @@ const skillFile = (
   )
 
 beforeEach(() => localStorage.clear())
+
+it('marks a user skill whose name an installed market Skill takes', async () => {
+  installMarketplaceBackend({
+    catalog: [reviewing],
+    selections: [marketplaceSelection(reviewing)],
+    skills: [serverSkill()],
+  })
+  renderSettingsPage(<SkillsPage />)
+  expect(
+    await screen.findByText(/与本空间已安装的市场 Skill「review」同名/),
+  ).toBeInTheDocument()
+  const localRow = (await screen.findAllByRole('article', { name: 'review' }))[0]
+  const user = userEvent.setup()
+  await user.click(
+    within(localRow).getByRole('button', { name: '查看技能 review' }),
+  )
+  const dialog = await screen.findByRole('dialog')
+  expect(within(dialog).getByText(/同名，在这里不生效，使用的是市场版本/)).toBeInTheDocument()
+})
 
 it('creates, edits, renders and deletes a server-backed skill', async () => {
   const backend = installMarketplaceBackend({
