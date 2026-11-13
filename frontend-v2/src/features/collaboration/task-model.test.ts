@@ -80,5 +80,6 @@ describe('task errors', () => {
     expect(boardMoveMessageFor(http(409, 'run_active'))).toBe('Agent 正在执行，等这一轮结束或先停止。')
     expect(boardMoveMessageFor(http(409, 'version_conflict'))).toBe('任务刚被其他人改过，看板已刷新，请再拖一次。')
     expect(boardMoveMessageFor(http(400, 'invalid_transition'))).toContain('待处理 → 进行中 → 待验收 → 已完成')
+    expect(boardMoveMessageFor(http(403, 'forbidden'))).toBe('只有任务创建人或工作区管理员能确认完成或取消任务。')
   })
 })
