@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -110,5 +110,36 @@ describe('session gate', () => {
     await userEvent.click(await screen.findByRole('button', { name: '退出登录' }))
     expect(await screen.findByRole('heading', { name: '登录 Ora' })).toBeInTheDocument()
     expect(seen).toContain('POST /auth/logout')
+  })
+})
+
+describe('deployed install hides browser-only settings routes', () => {
+  beforeEach(() => {
+    fakeBackend((c) => {
+      if (c.url === '/api/v1/me') return { status: 200, data: demoUser }
+      if (c.url === '/api/v1/me/tenants') {
+        return {
+          status: 200,
+          data: { items: [{ id: '00000000-0000-4000-8000-0000000000aa', name: '演示团队', status: 'active', role: 'owner' }], nextCursor: '' },
+        }
+      }
+      if (c.url === '/auth/providers')
+        return { status: 200, data: { providers: ['idaas'], default: 'idaas' } }
+      return undefined
+    })
+  })
+
+  it('redirects a direct visit to roles back to the squad page', async () => {
+    const router = renderAt('/settings/roles')
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe('/settings/squads'),
+    )
+  })
+
+  it('redirects a direct visit to model-connections back to the squad page', async () => {
+    const router = renderAt('/settings/model-connections')
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe('/settings/squads'),
+    )
   })
 })

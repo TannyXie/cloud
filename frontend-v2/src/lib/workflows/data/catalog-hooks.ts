@@ -4,6 +4,7 @@ import type { Skill } from "../contracts";
 import type { CatalogSkill } from "./plugin-catalog";
 import type { WorkflowAgentModel } from "../mock";
 import { useRoleCatalog } from "@/lib/settings-demo/role-hooks";
+import { useDeployedVersion } from "@/lib/deploy-mode";
 import { useContractsClient } from "./contracts-client";
 import { useAgentCatalog, type AgentEntry } from "./use-agent-catalog";
 import { useUser } from "@/app/auth/user";
@@ -23,9 +24,10 @@ const catalogKeys = {
 /** Loads configurable roles from the same browser-local snapshot Settings edits. */
 export function useAgents() {
   const query = useRoleCatalog();
+  const deployed = useDeployedVersion();
   return {
     ...query,
-    data: query.data?.map((role) => ({
+    data: deployed ? [] : query.data?.map((role) => ({
       id: role.id,
       namespace: role.namespace,
       name: role.name,

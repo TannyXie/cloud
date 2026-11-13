@@ -4,15 +4,23 @@ import { NavLink, Outlet, useLocation } from 'react-router'
 import { Settings } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
+import { useDeployedVersion } from '@/lib/deploy-mode'
 import { settingsPages } from './navigation'
 import { useSettingsData } from './data/hooks'
 import './settings.css'
 
+/** Settings pages that only persist browser-local data, hidden in a deployed install. */
+const browserOnlyPages = new Set(['roles', 'model-connections'])
+
 export default function SettingsPage() {
   const location = useLocation()
+  const deployed = useDeployedVersion()
   const { repository } = useSettingsData()
   const client = useQueryClient()
   const themePage = location.pathname === '/settings/theme'
+  const pages = deployed
+    ? settingsPages.filter((page) => !browserOnlyPages.has(page.path))
+    : settingsPages
   const navigation = useRef<HTMLElement>(null)
   useEffect(() => {
     const keepCurrentVisible = () =>
@@ -49,7 +57,7 @@ export default function SettingsPage() {
           aria-label="设置导航"
           className="settings-navigation"
         >
-          {settingsPages.map((page) => (
+          {pages.map((page) => (
             <NavLink
               key={page.path}
               to={page.path}
@@ -69,7 +77,7 @@ export default function SettingsPage() {
           <span>
             设置 <span className="px-2 text-muted-foreground/60">/</span>{' '}
             {
-              settingsPages.find((p) =>
+              pages.find((p) =>
                 location.pathname.endsWith('/' + p.path),
               )?.title
             }

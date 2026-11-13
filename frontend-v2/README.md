@@ -135,7 +135,7 @@ Agent 和模型清单读取与 Chat 相同的 `/chat/executors`，保存后端�
 
 ## 设置
 
-主导航的「设置」包含成员、角色、模型连接、主题、Plugins、Skills 六个独立子页面，默认进入成员页。成员页读取真实的 `GET /api/v1/tenants/{tid}/members`，owner 还能填邮箱邀请（`POST /api/v2/tenants/{tid}/members`，契约之外，见 v2-server README）；主题真实作用于整个 V2；Plugins 使用真实市场目录与空间选择；Skills 使用按登录用户隔离的服务端技能库，支持新建和导入 `SKILL.md`，并会在新 Agent 会话中物化；角色保存在浏览器本机快照中，可新建、编辑、删除和导入 Markdown，并出现在工作流 Agent 节点的角色选择中，但 v2 执行仍不注入角色内容。模型连接状态只保存在当前浏览器；市场 Agent、Hook、MCP 只浏览，演示安装只在 `VITE_DEMO_MOCK=1` 时由 `lib/demo/plugin-installs.ts` 记录到浏览器本地。没有真实 API Key 或模型调用；详情见 [`src/features/settings/README.md`](src/features/settings/README.md)。
+主导航的「设置」包含成员、角色、模型连接、主题、Plugins、Skills 六个独立子页面，默认进入成员页。成员页读取真实的 `GET /api/v1/tenants/{tid}/members`，owner 还能填邮箱邀请（`POST /api/v2/tenants/{tid}/members`，契约之外，见 v2-server README）；主题真实作用于整个 V2；Plugins 使用真实市场目录与空间选择；Skills 使用按登录用户隔离的服务端技能库，支持新建和导入 `SKILL.md`，并会在新 Agent 会话中物化；角色保存在浏览器本机快照中，可新建、编辑、删除和导入 Markdown，并出现在工作流 Agent 节点的角色选择中，但 v2 执行仍不注入角色内容。模型连接状态只保存在当前浏览器（部署版隐藏角色、模型连接两页及工作流角色选择，见 settings README）；市场 Agent、Hook、MCP 只浏览，演示安装只在 `VITE_DEMO_MOCK=1` 时由 `lib/demo/plugin-installs.ts` 记录到浏览器本地。没有真实 API Key 或模型调用；详情见 [`src/features/settings/README.md`](src/features/settings/README.md)。
 
 端到端测试可通过 `E2E_WEB_PORT`、`E2E_SERVER_PORT` 指定独立端口，默认仍为 5174、8091。与其他应用共用机器时选择空闲端口；测试不会复用已启动的服务。
 
