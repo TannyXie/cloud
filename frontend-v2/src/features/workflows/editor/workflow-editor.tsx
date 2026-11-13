@@ -479,6 +479,12 @@ function WorkflowEditorContent({
    * so a fast click cannot land on the workflow the user just left.
    */
   const [switchingWorkflow, setSwitchingWorkflow] = useState(false);
+  /**
+   * Monotonic token for workflow switches. It only lets the last pick apply: an older switch's
+   * flush may resolve after a newer pick, so it must not change the selection or lift `inert` while
+   * the newer switch is still saving.
+   */
+  const workflowSwitchGeneration = useRef(0);
   /** Selected workflow id whose draft is currently mounted in the editor. */
   const [hydratedWorkflowId, setHydratedWorkflowId] = useState<string | null>(
     null,
@@ -1140,8 +1146,17 @@ function WorkflowEditorContent({
     if (workflowId === resolvedWorkflowId) {
       return;
     }
+    // Only the latest pick wins. Two flushes can overlap when the sidebar is clicked again before
+    // the previous one resolves; without this the selection would follow whichever save returned
+    // last, not the row the user picked last.
+    const generation = ++workflowSwitchGeneration.current;
+    const isLatest = () => generation === workflowSwitchGeneration.current;
     setSwitchingWorkflow(true);
     const saved = await autosave.flush({ force: true }).catch(() => false);
+    if (!isLatest()) {
+      // A newer pick owns the switch; leave the selection and `inert` to it.
+      return;
+    }
     if (!saved) {
       // Stay on the current draft so a failed write cannot drop unsaved edits.
       setSwitchingWorkflow(false);

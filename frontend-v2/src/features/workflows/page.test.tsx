@@ -216,6 +216,46 @@ describe("workflow page", () => {
     expect(screen.queryByDisplayValue("示例：代码审查")).not.toBeInTheDocument();
   });
 
+  it("keeps the last workflow picked when two switches overlap their saves", async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await screen.findByDisplayValue("示例：代码审查");
+    // Hold every draft write on a per-request gate so the test decides the order in which
+    // each switch's flush returns.
+    const gates: Array<() => void> = [];
+    const answer = http.defaults.adapter as AxiosAdapter;
+    http.defaults.adapter = async (config) => {
+      if (config.method?.toUpperCase() === "PUT" && config.url?.endsWith("/draft")) {
+        await new Promise<void>((resolve) => gates.push(resolve));
+      }
+      return answer(config);
+    };
+
+    // Pick 逐段翻译, then, while its flush is still in flight, pick the loop workflow. The second
+    // pick is the one that must win regardless of save resolution order.
+    await user.click(within(library()).getByRole("button", { name: "示例：逐段翻译" }));
+    const editor = screen.getByRole("main");
+    await waitFor(() => expect(editor).toHaveAttribute("inert"));
+    expect(gates.length).toBe(1);
+
+    await user.click(within(library()).getByRole("button", { name: "循环综合测试：分支与退出" }));
+    // The second pick's flush joins the in-flight save, so only one draft write is outstanding.
+    expect(gates.length).toBe(1);
+    expect(editor).toHaveAttribute("inert");
+
+    // Let the first pick's save return. Its selection is stale, so it must neither change the
+    // selected workflow nor lift the editor's inert; the latest pick starts its own save.
+    gates[0]();
+    await waitFor(() => expect(gates.length).toBe(2));
+    expect(screen.queryByDisplayValue("示例：逐段翻译")).not.toBeInTheDocument();
+    expect(editor).toHaveAttribute("inert");
+
+    // Let the latest pick's save return: it owns the switch.
+    gates[1]();
+    expect(await screen.findByDisplayValue("循环综合测试：分支与退出")).toBeInTheDocument();
+    expect(editor).not.toHaveAttribute("inert");
+  });
+
   it("keeps workflows across a reload of the page", async () => {
     const user = userEvent.setup();
     const first = await renderPage();
