@@ -81,6 +81,19 @@ describe('NewProjectDialog', () => {
     expect(onCreate).toHaveBeenCalledTimes(2)
   })
 
+  it('passes an optional repository token without echoing it', async () => {
+    const onCreate = vi.fn(async () => undefined)
+    const f = renderDialog(onCreate)
+    await userEvent.type(f.url(), 'https://github.com/octocat/private')
+    await userEvent.type(screen.getByLabelText('仓库令牌（私有仓库选填）'), 's3cr3t')
+    await userEvent.click(f.submit())
+    await vi.waitFor(() =>
+      expect(onCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ repositoryUrl: 'https://github.com/octocat/private', repositoryToken: 's3cr3t' }),
+      ),
+    )
+  })
+
   it('starts empty again after a project is created', async () => {
     const f = renderDialog(vi.fn(async () => undefined))
     await userEvent.type(f.url(), 'https://github.com/octocat/Hello-World')

@@ -309,10 +309,27 @@ v2 不向小队自动派发，工作流在自己的页面运行。
 ### 项目仓库
 
 项目使用独立同步候选契约 [`projects.openapi.json`](internal/projectrepos/projects.openapi.json)：
-`GET/POST /api/v2/tenants/{tid}/projects` 与 `GET /api/v2/tenants/{tid}/projects/{pid}`。
-创建只接受匿名 HTTPS 仓库 URL 与分支，完成一次 mirror clone、验证分支并固定 snapshot 后才写入
-已有的 PostgreSQL 项目记录；clone 或分支检查失败不创建项目。之后不 fetch，也不向上游 commit/push。
-列表按 ID 升序分页，读取要求当前租户成员关系；创建者来自登录身份。响应不暴露 mirror 路径、凭据或 snapshot ref。
+`GET/POST /api/v2/tenants/{tid}/projects`、`GET /api/v2/tenants/{tid}/projects/{pid}`、
+`POST /api/v2/tenants/{tid}/projects/{pid}/sync` 和
+`PUT`/`DELETE /api/v2/tenants/{tid}/projects/{pid}/repository-token`。
+创建只接受匿名 HTTPS 仓库 URL 与分支（私有仓库可同时给出令牌），完成一次 mirror clone、验证分支并固定
+snapshot 后才写入已有的 PostgreSQL 项目记录；clone 或分支检查失败不创建项目。
+
+**手动同步**（A4 D3）：项目所在团队的成员点「同步」后，Cloud 在进程内把绑定的分支取进镜像（完整历史、
+不取 tag），写入新的快照 ref `refs/ora/upstreams/<pid>/snapshots/<commit>`（只新建、不改写），再把项目的当前
+快照指向它；之后新建的会话以它为基准，已有会话目录不变。每个项目同时最多一次同步，进行中再点共享同一次
+的结果；没有 webhook、轮询或建会话时的隐式同步。外部分支被强推时照常跟随并标注，旧快照保留；分支删除、
+不可达、认证失败或超时会话不变，原因写入项目记录并在项目页显示，不自动重试。Cloud 重启会把进行中的同步
+标为中断。
+
+**私有仓库令牌**（A4 D4）：每个项目至多一个，建项目时填写，之后只由 owner 或项目创建者更换/删除。令牌用
+部署配置的密钥（复用 `V2_MARKET_CREDENTIAL_KEY`）以 AES-256-GCM 加密后存 PostgreSQL，附加数据绑定租户、
+项目和仓库地址；密钥缺失时 Cloud 照常启动，需要令牌的拉取失败并写明原因。明文只在执行一条外部 Git 命令
+时交给子进程（`http.extraHeader`），不进命令行、URL、Git 配置、日志和 API 应答；API 只返回是否已配置和最后
+更换时间，也不下发给 Node。
+
+列表按 ID 升序分页，读取要求当前租户成员关系；创建者来自登录身份。响应不暴露 mirror 路径、令牌密文或
+snapshot ref。
 
 [`projectrepos.New`](internal/projectrepos/README.md) 通过 `server.Options.Projects` 注入。
 `main` 装配该依赖，普通启动为开发登录的演示团队创建或复用真实 `fixture://demo` 项目，

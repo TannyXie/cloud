@@ -21,7 +21,9 @@ import {
   PanelLeftOpenIcon,
   PencilIcon,
   PlusIcon,
+  RefreshCwIcon,
   SquarePenIcon,
+  TriangleAlertIcon,
   Trash2Icon,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -179,7 +181,9 @@ function ProjectGroup({ project, dropLine }: { project: Project; dropLine?: 'bef
             <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground transition-transform group-aria-expanded/trigger:rotate-90" />
             <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
             <FadeText text={project.name} />
+            {project.syncError && <TriangleAlertIcon className="size-3.5 shrink-0 text-destructive" aria-label="上次同步失败" />}
           </CollapsibleTrigger>
+          <ProjectSyncButton project={project} />
           <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="ghost" size="icon-xs" aria-label={`在 ${project.name} 新建对话`} />}>
               <PlusIcon />
@@ -196,6 +200,7 @@ function ProjectGroup({ project, dropLine }: { project: Project; dropLine?: 'bef
         </div>
         <CollapsibleContent>
           <div className="mt-0.5 mb-1 ml-[1.9rem] flex flex-col pl-2">
+            <ProjectSyncState project={project} />
             {sessions.length === 0 && <p className="px-2 py-1 text-xs text-muted-foreground">还没有会话</p>}
             <ProjectRuns projectId={project.id} />
             {sessions.map((s) => (
@@ -206,6 +211,54 @@ function ProjectGroup({ project, dropLine }: { project: Project; dropLine?: 'bef
       </Collapsible>
       <RunWorkflowDialog projectId={project.id} workflow={runWorkflow} onClose={() => setRunWorkflow(undefined)} />
     </section>
+  )
+}
+
+/**
+ * Pulls the project's bound branch once. The spin keeps it from running twice at once; a failure
+ * refreshes the record so the server's reason shows beside the project.
+ */
+function ProjectSyncButton({ project }: { project: Project }) {
+  const syncProject = useChatStore((s) => s.syncProject)
+  const [busy, setBusy] = useState(false)
+  const sync = async () => {
+    if (busy) return
+    setBusy(true)
+    await syncProject(project.id)
+    setBusy(false)
+  }
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="shrink-0 text-muted-foreground"
+      aria-label={`同步 ${project.name}`}
+      title="拉取外部仓库的新提交"
+      disabled={busy || project.syncRunning}
+      onClick={() => void sync()}
+    >
+      <RefreshCwIcon className={cn('size-3.5', (busy || project.syncRunning) && 'animate-spin')} />
+    </Button>
+  )
+}
+
+/** The project's sync outcome under its sessions: failures, a rewritten branch, or the last sync. */
+function ProjectSyncState({ project }: { project: Project }) {
+  const failure = project.syncError
+  const forcePushed = project.syncForcePushed
+  const synced = project.syncAt
+  if (!failure && !forcePushed && !synced) return null
+  return (
+    <p className="px-2 pt-0.5 text-xs text-muted-foreground">
+      {failure && <span className="text-destructive">同步失败：{failure}</span>}
+      {!failure && forcePushed && <span>外部分支被改写，当前快照跟随了新的提交。</span>}
+      {!failure && !forcePushed && synced && (
+        <span>
+          上次同步{' '}
+          {new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(synced))}
+        </span>
+      )}
+    </p>
   )
 }
 

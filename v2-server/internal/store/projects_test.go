@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/wanglongan587/cloud/v2-server/internal/execution"
@@ -17,11 +18,11 @@ func TestProjectsSharedOnlyWithinTheirTenant(t *testing.T) {
 	}
 	other := executionMember(t, f.s, "member")
 	got, err := f.s.GetProject(ctx, other, project.ID)
-	if err != nil || got != project {
+	if err != nil || !reflect.DeepEqual(got, project) {
 		t.Fatalf("tenant share=%+v err=%v", got, err)
 	}
 	items, err := f.s.ListProjects(ctx, other)
-	if err != nil || len(items) != 1 || items[0] != project {
+	if err != nil || len(items) != 1 || !reflect.DeepEqual(items[0], project) {
 		t.Fatalf("projects=%+v err=%v", items, err)
 	}
 	if _, err := f.s.CreateProject(ctx, f.scope, project); !errors.Is(err, execution.ErrConflict) {

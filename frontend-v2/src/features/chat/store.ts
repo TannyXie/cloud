@@ -6,7 +6,7 @@ import type { CreateProject } from '@/lib/projects-api/generated'
 import { applyEvent, isResponding } from '@/components/agent-thread/model/conversation'
 import { applySessionEvent, conversationOf, emptySessionView, type SessionView } from '@/components/agent-thread/model/history'
 import { type Attachment, type Conversation, emptyConversation, type PluginRef } from '@/components/agent-thread/model/types'
-import { type Failure, failureOf, projectFailureOf, remote, type RemoteState } from './remote'
+import { type Failure, failureOf, projectFailureOf, remote, type RemoteState, syncFailureOf } from './remote'
 
 /**
  * What the first version of the chat backend can do. The input and the history hide what it
@@ -20,6 +20,16 @@ export interface Project {
   name: string
   /** Where the project's main checkout lives, for projects the person added. */
   path?: string
+  /** The last successful manual sync, if any. */
+  syncAt?: string
+  /** A user-facing reason the last sync failed or was interrupted, if it did. */
+  syncError?: string
+  /** Whether the last successful sync followed a rewritten remote branch. */
+  syncForcePushed?: boolean
+  /** Whether a manual sync is running. */
+  syncRunning?: boolean
+  /** Whether a private-repository token is configured. */
+  repositoryTokenConfigured?: boolean
 }
 
 export interface Session {
@@ -139,6 +149,11 @@ interface State {
    * Resolves to why it failed, if it did.
    */
   createProject: (input: CreateProject) => Promise<string | undefined>
+  /**
+   * Pulls the project's bound branch once and replaces it in the list with the advanced record.
+   * Resolves to why it failed, if it did; the failure reason stays on the project for the sidebar.
+   */
+  syncProject: (id: string) => Promise<string | undefined>
   /** Moves project `id` to where `overId` is, as a drag and drop does. */
   moveProject: (id: string, overId: string) => void
   send: (id: string, draft: Draft) => void
@@ -542,6 +557,26 @@ export const useChatStore = create<State>()(
           // From the history column a session may be showing: the new chat opens in its place.
           get().startNewChat({ projectId: project.id })
           return undefined
+        },
+        syncProject: async (id) => {
+          const { tenantId: tid, userId } = get()
+          if (!tid || !userId) return '还没连上后端，请稍后再试。'
+          try {
+            const project = await remote.syncProject(tid, id)
+            if (!isCurrent(tid, userId)) return undefined
+            set((s) => ({ projects: s.projects.map((p) => (p.id === project.id ? project : p)) }))
+            return undefined
+          } catch (error) {
+            if (!isCurrent(tid, userId)) return undefined
+            // Reload the record so the sidebar shows the server-recorded failure reason.
+            try {
+              const project = await remote.project(tid, id)
+              if (isCurrent(tid, userId)) set((s) => ({ projects: s.projects.map((p) => (p.id === project.id ? project : p)) }))
+            } catch {
+              // Keep the last known state; the toast already says it failed.
+            }
+            return syncFailureOf(error)
+          }
         },
         moveProject: (id, overId) => {
           set((s) => {

@@ -322,4 +322,22 @@ describe('chat page', () => {
     act(() => useChatStore.getState().moveProject('p-desktop', 'p-cloud'))
     expect(order()).toEqual(['项目 ora-space/desktop', '项目 ora-space/cloud'])
   })
+
+  it('syncs a project on its sidebar button and shows when it last succeeded', async () => {
+    await renderReady()
+    const cloud = within(sidebar()).getByRole('region', { name: '项目 ora-space/cloud' })
+    expect(within(cloud).queryByText(/上次同步/)).not.toBeInTheDocument()
+    await userEvent.click(within(cloud).getByRole('button', { name: '同步 ora-space/cloud' }))
+    expect(await within(cloud).findByText(/上次同步/)).toBeInTheDocument()
+    expect(backend.seen).toContain('POST /projects/p-cloud/sync')
+  })
+
+  it('shows the server-recorded reason after a sync fails', async () => {
+    await renderReady()
+    backend.refuseSync = { status: 400, data: { code: 'repository_unavailable', params: {}, requestId: 'r' } }
+    backend.syncError = '外部分支已删除或不可用，无法同步。'
+    const cloud = within(sidebar()).getByRole('region', { name: '项目 ora-space/cloud' })
+    await userEvent.click(within(cloud).getByRole('button', { name: '同步 ora-space/cloud' }))
+    expect(await within(cloud).findByText(/同步失败：外部分支已删除/)).toBeInTheDocument()
+  })
 })

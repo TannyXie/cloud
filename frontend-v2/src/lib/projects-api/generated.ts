@@ -35,6 +35,26 @@ export interface Project {
   /** @pattern ^([0-9a-f]{40}|[0-9a-f]{64})$ */
   commitId: string;
   createdAt: string;
+  /** Whether a private-repository token is set; the token itself is never returned. */
+  repositoryTokenConfigured: boolean;
+  repositoryTokenSetAt?: string;
+  /** When the last successful manual sync completed. */
+  syncAt?: string;
+  /** User-facing reason of the last failed or interrupted sync; empty means none. */
+  syncError?: string;
+  /** Whether the last successful sync followed a rewritten remote branch. */
+  syncForcePushed?: boolean;
+  /** Whether a manual sync is in flight. */
+  syncRunning?: boolean;
+}
+
+export interface SetRepositoryToken {
+  /**
+     * The HTTPS token of the private repository. Never echoed back.
+     * @minLength 1
+     * @maxLength 4096
+     */
+  token: string;
 }
 
 export interface CreateProject {
@@ -55,6 +75,11 @@ export interface CreateProject {
   defaultBranch: string;
   /** Defaults to the tenant's demo space. */
   spaceId?: string;
+  /**
+     * Optional HTTPS token of a private repository; never echoed back.
+     * @maxLength 4096
+     */
+  repositoryToken?: string;
 }
 
 export interface ProjectList {
@@ -343,3 +368,195 @@ export function useGetApiV2TenantsTidProjectsPid<TData = Awaited<ReturnType<type
 
   return withQueryKey(query, queryOptions.queryKey);
 }
+
+
+
+
+
+
+
+export const postApiV2TenantsTidProjectsPidSync = (
+    tid: string,
+    pid: string,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<Project>(
+      {url: `/api/v2/tenants/${tid}/projects/${pid}/sync`, method: 'POST', signal
+    },
+      options);
+    }
+
+
+
+
+export const getPostApiV2TenantsTidProjectsPidSyncMutationKey = () => ['postApiV2TenantsTidProjectsPidSync'] as const;
+
+export const getPostApiV2TenantsTidProjectsPidSyncMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postApiV2TenantsTidProjectsPidSync>>, TError,PostApiV2TenantsTidProjectsPidSyncMutationVariables, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof postApiV2TenantsTidProjectsPidSync>>, TError,PostApiV2TenantsTidProjectsPidSyncMutationVariables, TContext> => {
+
+const mutationKey = getPostApiV2TenantsTidProjectsPidSyncMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof postApiV2TenantsTidProjectsPidSync>>, PostApiV2TenantsTidProjectsPidSyncMutationVariables> = (props) => {
+          const {tid,pid} = props ?? {};
+
+          return  postApiV2TenantsTidProjectsPidSync(tid,pid,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PostApiV2TenantsTidProjectsPidSyncMutationResult = NonNullable<Awaited<ReturnType<typeof postApiV2TenantsTidProjectsPidSync>>>
+
+    export type PostApiV2TenantsTidProjectsPidSyncMutationError = ErrorType<Error>
+    export type PostApiV2TenantsTidProjectsPidSyncMutationVariables = {tid: string;pid: string}
+
+    export const usePostApiV2TenantsTidProjectsPidSync = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof postApiV2TenantsTidProjectsPidSync>>, TError,PostApiV2TenantsTidProjectsPidSyncMutationVariables, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof postApiV2TenantsTidProjectsPidSync>>,
+        TError,
+        PostApiV2TenantsTidProjectsPidSyncMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPostApiV2TenantsTidProjectsPidSyncMutationOptions(options), queryClient);
+    }
+
+export const putApiV2TenantsTidProjectsPidRepositoryToken = (
+    tid: string,
+    pid: string,
+    setRepositoryToken: BodyType<SetRepositoryToken>,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<Project>(
+      {url: `/api/v2/tenants/${tid}/projects/${pid}/repository-token`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: setRepositoryToken, signal
+    },
+      options);
+    }
+
+
+
+
+export const getPutApiV2TenantsTidProjectsPidRepositoryTokenMutationKey = () => ['putApiV2TenantsTidProjectsPidRepositoryToken'] as const;
+
+export const getPutApiV2TenantsTidProjectsPidRepositoryTokenMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putApiV2TenantsTidProjectsPidRepositoryToken>>, TError,PutApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof putApiV2TenantsTidProjectsPidRepositoryToken>>, TError,PutApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables, TContext> => {
+
+const mutationKey = getPutApiV2TenantsTidProjectsPidRepositoryTokenMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof putApiV2TenantsTidProjectsPidRepositoryToken>>, PutApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables> = (props) => {
+          const {tid,pid,data} = props ?? {};
+
+          return  putApiV2TenantsTidProjectsPidRepositoryToken(tid,pid,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PutApiV2TenantsTidProjectsPidRepositoryTokenMutationResult = NonNullable<Awaited<ReturnType<typeof putApiV2TenantsTidProjectsPidRepositoryToken>>>
+    export type PutApiV2TenantsTidProjectsPidRepositoryTokenMutationBody = BodyType<SetRepositoryToken>
+    export type PutApiV2TenantsTidProjectsPidRepositoryTokenMutationError = ErrorType<Error>
+    export type PutApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables = {tid: string;pid: string;data: BodyType<SetRepositoryToken>}
+
+    export const usePutApiV2TenantsTidProjectsPidRepositoryToken = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof putApiV2TenantsTidProjectsPidRepositoryToken>>, TError,PutApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof putApiV2TenantsTidProjectsPidRepositoryToken>>,
+        TError,
+        PutApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPutApiV2TenantsTidProjectsPidRepositoryTokenMutationOptions(options), queryClient);
+    }
+
+export const deleteApiV2TenantsTidProjectsPidRepositoryToken = (
+    tid: string,
+    pid: string,
+ options?: SecondParameter<typeof customInstance>,signal?: AbortSignal
+) => {
+
+
+      return customInstance<Project>(
+      {url: `/api/v2/tenants/${tid}/projects/${pid}/repository-token`, method: 'DELETE', signal
+    },
+      options);
+    }
+
+
+
+
+export const getDeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationKey = () => ['deleteApiV2TenantsTidProjectsPidRepositoryToken'] as const;
+
+export const getDeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteApiV2TenantsTidProjectsPidRepositoryToken>>, TError,DeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables, TContext>, request?: SecondParameter<typeof customInstance>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteApiV2TenantsTidProjectsPidRepositoryToken>>, TError,DeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables, TContext> => {
+
+const mutationKey = getDeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteApiV2TenantsTidProjectsPidRepositoryToken>>, DeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables> = (props) => {
+          const {tid,pid} = props ?? {};
+
+          return  deleteApiV2TenantsTidProjectsPidRepositoryToken(tid,pid,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationResult = NonNullable<Awaited<ReturnType<typeof deleteApiV2TenantsTidProjectsPidRepositoryToken>>>
+
+    export type DeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationError = ErrorType<Error>
+    export type DeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables = {tid: string;pid: string}
+
+    export const useDeleteApiV2TenantsTidProjectsPidRepositoryToken = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteApiV2TenantsTidProjectsPidRepositoryToken>>, TError,DeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables, TContext>, request?: SecondParameter<typeof customInstance>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteApiV2TenantsTidProjectsPidRepositoryToken>>,
+        TError,
+        DeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteApiV2TenantsTidProjectsPidRepositoryTokenMutationOptions(options), queryClient);
+    }

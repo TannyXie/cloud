@@ -86,6 +86,10 @@ export interface ChatBackend {
   created: ReturnType<typeof project>[]
   /** Makes the next project creation answer this instead of cloning. */
   refuseProject?: { status: number; data: unknown }
+  /** Makes the next sync answer this instead of succeeding. */
+  refuseSync?: { status: number; data: unknown }
+  /** The recorded syncError a failed sync leaves on the project, read back by the page. */
+  syncError?: string
   /** Requests seen, as "METHOD /path". */
   seen: string[]
   bodies: unknown[]
@@ -128,6 +132,23 @@ export function chatBackend(options: { unavailable?: boolean } = {}): ChatBacken
       return config.params?.after === 'p-cloud'
         ? { status: 200, data: { items: [project('p-desktop', 'ora-space/desktop'), ...state.created], nextCursor: '' } }
         : { status: 200, data: { items: [project('p-cloud', 'ora-space/cloud')], nextCursor: 'p-cloud' } }
+    }
+    const projectMatch = url.match(new RegExp(`^/api/v2/tenants/${tenantId}/projects/([^/]+)(/sync)?$`))
+    if (projectMatch) {
+      const id = projectMatch[1]
+      const sync = projectMatch[2]
+      if (sync && method === 'POST') {
+        state.seen.push(`POST /projects/${id}/sync`)
+        if (state.refuseSync) {
+          const refused = state.refuseSync
+          state.refuseSync = undefined
+          return refused
+        }
+        return { status: 200, data: { ...project(id, id), syncAt: at, syncError: state.syncError ?? '' } }
+      }
+      if (!sync && method === 'GET') {
+        return { status: 200, data: { ...project(id, id), syncAt: at, syncError: state.syncError ?? '' } }
+      }
     }
     if (!url.startsWith(base)) return undefined
     if (options.unavailable) return { status: 503, data: { code: 'execution_unavailable', params: {}, requestId: 'r' } }

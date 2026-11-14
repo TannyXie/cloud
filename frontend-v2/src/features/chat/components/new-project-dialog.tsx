@@ -11,11 +11,12 @@ function nameOf(repositoryUrl: string): string {
   return repositoryUrl.trim().replace(/[?#].*$/, '').replace(/\/+$/, '').replace(/\.git$/, '').split('/').at(-1) ?? ''
 }
 
-const empty = { repositoryUrl: '', defaultBranch: 'main', name: '' }
+const empty = { repositoryUrl: '', defaultBranch: 'main', name: '', repositoryToken: '' }
 
 /**
  * Asks for the repository a new project comes from. The backend clones it before answering, which
- * can take a while, so the dialog stays open until it has; a failure keeps what was typed.
+ * can take a while, so the dialog stays open until it has; a failure keeps what was typed. A private
+ * repository can supply an HTTPS token; it is stored encrypted and never returned.
  */
 export function NewProjectDialog({
   open,
@@ -36,7 +37,12 @@ export function NewProjectDialog({
   const reset = () => (setForm(empty), setNamed(false), setError(undefined))
 
   const submit = async () => {
-    const input = { name: name.trim(), repositoryUrl: form.repositoryUrl.trim(), defaultBranch: form.defaultBranch.trim() }
+    const input = {
+      name: name.trim(),
+      repositoryUrl: form.repositoryUrl.trim(),
+      defaultBranch: form.defaultBranch.trim(),
+      repositoryToken: form.repositoryToken.trim() || undefined,
+    }
     if (busy || !input.name || !input.repositoryUrl || !input.defaultBranch) return
     setBusy(true)
     setError(undefined)
@@ -82,6 +88,18 @@ export function NewProjectDialog({
                 required
                 value={form.defaultBranch}
                 onChange={(e) => setForm({ ...form, defaultBranch: e.target.value })}
+                className="font-mono"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-project-token">仓库令牌（私有仓库选填）</Label>
+              <Input
+                id="new-project-token"
+                type="password"
+                placeholder="HTTPS 令牌，不会显示"
+                autoComplete="off"
+                value={form.repositoryToken}
+                onChange={(e) => setForm({ ...form, repositoryToken: e.target.value })}
                 className="font-mono"
               />
             </div>

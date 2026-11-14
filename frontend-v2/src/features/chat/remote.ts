@@ -2,7 +2,9 @@ import { statusOf } from '@/lib/api-client'
 import {
   type CreateProject,
   getApiV2TenantsTidProjects,
+  getApiV2TenantsTidProjectsPid,
   postApiV2TenantsTidProjects,
+  postApiV2TenantsTidProjectsPidSync,
 } from '@/lib/projects-api/generated'
 import { isAxiosError } from 'axios'
 import {
@@ -24,6 +26,11 @@ import {
 export interface RemoteProject {
   id: string
   name: string
+  syncAt?: string
+  syncError?: string
+  syncForcePushed?: boolean
+  syncRunning?: boolean
+  repositoryTokenConfigured?: boolean
 }
 
 /** Everything the chat page loads once it knows the tenant. */
@@ -47,7 +54,7 @@ async function allProjects(tid: string): Promise<RemoteProject[]> {
   let after: string | undefined
   do {
     const page = await getApiV2TenantsTidProjects(tid, { limit: 100, after })
-    all.push(...page.items.map((p) => ({ id: p.id, name: p.name })))
+    all.push(...page.items.map((p) => ({ id: p.id, name: p.name, syncAt: p.syncAt, syncError: p.syncError, syncForcePushed: p.syncForcePushed, syncRunning: p.syncRunning, repositoryTokenConfigured: p.repositoryTokenConfigured })))
     after = page.nextCursor || undefined
   } while (after)
   return all
@@ -79,6 +86,16 @@ export function projectFailureOf(error: unknown, input: CreateProject): string {
   if (status === 400 && body?.code === 'repository_unavailable') return `无法克隆这个仓库，或仓库里没有分支 ${input.defaultBranch}。请确认地址能公开访问、分支存在。`
   if (status === 409 && body?.code === 'project_conflict') return '和已有项目冲突，请重试。'
   return '新建项目失败，请重试。'
+}
+
+/** Why a manual sync failed, as the sidebar says it; the server keeps the detailed reason. */
+export function syncFailureOf(error: unknown): string {
+  const status = statusOf(error)
+  const body = isAxiosError(error) ? (error.response?.data as { code?: string } | undefined) : undefined
+  if (status === 400 && body?.code === 'repository_unavailable') return '同步失败，详情见项目。'
+  if (status === 400 && body?.code === 'project_token_unavailable') return '同步失败：项目令牌不可用，请重新设置。'
+  if (status === 404) return '项目不存在。'
+  return '同步失败，请重试。'
 }
 
 /** Whether a request's outcome is unknown and must be retried with the same idempotency key. */
@@ -134,7 +151,17 @@ export const remote = {
   /** Clones the repository and records the project; resolves only once both have succeeded. */
   createProject: async (tid: string, input: CreateProject): Promise<RemoteProject> => {
     const p = await postApiV2TenantsTidProjects(tid, input)
-    return { id: p.id, name: p.name }
+    return { id: p.id, name: p.name, syncAt: p.syncAt, syncError: p.syncError, syncForcePushed: p.syncForcePushed, syncRunning: p.syncRunning, repositoryTokenConfigured: p.repositoryTokenConfigured }
+  },
+  /** Pulls the project's bound branch once and returns the advanced project record. */
+  syncProject: async (tid: string, pid: string): Promise<RemoteProject> => {
+    const p = await postApiV2TenantsTidProjectsPidSync(tid, pid)
+    return { id: p.id, name: p.name, syncAt: p.syncAt, syncError: p.syncError, syncForcePushed: p.syncForcePushed, syncRunning: p.syncRunning, repositoryTokenConfigured: p.repositoryTokenConfigured }
+  },
+  /** Reads one project, so a failed sync can still refresh the reason the server recorded. */
+  project: async (tid: string, pid: string): Promise<RemoteProject> => {
+    const p = await getApiV2TenantsTidProjectsPid(tid, pid)
+    return { id: p.id, name: p.name, syncAt: p.syncAt, syncError: p.syncError, syncForcePushed: p.syncForcePushed, syncRunning: p.syncRunning, repositoryTokenConfigured: p.repositoryTokenConfigured }
   },
 
   /**

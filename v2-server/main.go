@@ -112,8 +112,11 @@ func run(addr, dbURL string, cleanup, fixture, testFixtures bool) (resultErr err
 			db.Close()
 		}
 	}()
-	projects, e := projectrepos.New(db, projectrepos.Options{Root: filepath.Join(base, "repositories")})
+	projects, e := projectrepos.New(db, projectrepos.Options{Root: filepath.Join(base, "repositories"), CredentialKey: os.Getenv("V2_MARKET_CREDENTIAL_KEY")})
 	if e != nil {
+		return e
+	}
+	if e := db.ClearStaleSyncs(ctx); e != nil {
 		return e
 	}
 	models, e := executionruntime.ModelsFromEnvironment(os.Getenv)
