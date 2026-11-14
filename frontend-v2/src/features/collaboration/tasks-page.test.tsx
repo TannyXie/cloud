@@ -21,6 +21,7 @@ const me: User = { id: 'user-me', displayName: '演示用户', status: 'active',
 const project: Project = {
   id: 'project-1', tenantId: 'tenant', ownerUserId: 'user-me', name: '演示项目',
   repositoryUrl: 'fixture://demo', defaultBranch: 'main', commitId: 'a'.repeat(40), createdAt: '2026-10-01T00:00:00Z',
+  repositoryTokenConfigured: false,
 }
 const task = (overrides: Partial<Task> = {}): Task => ({
   id: 'task-1', tenantId: 'tenant', title: '整理演示数据', description: '', projectId: 'project-1',
