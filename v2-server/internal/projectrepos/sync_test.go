@@ -3,6 +3,7 @@
 package projectrepos
 
 import (
+	"context"
 	"encoding/base64"
 	"net/http"
 	"net/http/cgi"
@@ -37,6 +38,14 @@ func projectGit(t *testing.T, dir string, args ...string) string {
 // contacted the remote.
 func syncGitRemote(t *testing.T) (*httptest.Server, string, string, *atomic.Int64) {
 	t.Helper()
+	return gitRemoteRequiring(t, "")
+}
+
+// gitRemoteRequiring is syncGitRemote for a private repository: with a non-empty authorization it
+// answers 401 to any request whose Authorization header is not exactly that value, as a hosted
+// provider does.
+func gitRemoteRequiring(t *testing.T, authorization string) (*httptest.Server, string, string, *atomic.Int64) {
+	t.Helper()
 	root := t.TempDir()
 	work := filepath.Join(root, "work")
 	if err := os.Mkdir(work, 0700); err != nil {
@@ -55,6 +64,13 @@ func syncGitRemote(t *testing.T) (*httptest.Server, string, string, *atomic.Int6
 		if strings.Contains(r.URL.Path, "info/refs") {
 			probes.Add(1)
 		}
+		if authorization != "" && r.Header.Get("Authorization") != authorization {
+			w.Header().Set("WWW-Authenticate", `Basic realm="fixture"`)
+			http.Error(w, "authentication required", http.StatusUnauthorized)
+			return
+		}
+		// The provider consumed the credentials; git-http-backend serves the repository as is.
+		r.Header.Del("Authorization")
 		cgiHandler.ServeHTTP(w, r)
 	}))
 	t.Cleanup(remote.Close)
@@ -160,7 +176,7 @@ func TestSyncFailureKeepsCurrentSnapshotAndShowsReason(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Commit != initial || stored.SyncRunning || stored.SyncError == "" {
+	if stored.Commit != initial || stored.SyncRunning || stored.SyncError != "外部分支已删除或不可用，无法同步。" {
 		t.Fatalf("failed sync state=%+v", stored)
 	}
 	if got := projectGit(t, stored.MirrorPath, "rev-parse", stored.SnapshotRef); got != initial {
@@ -233,5 +249,69 @@ func TestRepositoryTokenSealsToBindingAndNeverLeaks(t *testing.T) {
 	cleared, err := svc.ClearRepositoryToken(t.Context(), scope, project.ID)
 	if err != nil || len(cleared.RepositoryTokenSealed) != 0 || cleared.RepositoryTokenSetAt == nil {
 		t.Fatalf("cleared=%+v err=%v", cleared, err)
+	}
+}
+
+func TestPrivateRepositoryTokenCreatesSyncsAndReportsRejection(t *testing.T) {
+	remote, bare, _, _ := gitRemoteRequiring(t, strings.TrimPrefix(authHeaderForToken("secret"), "Authorization: "))
+	svc, _, scope := syncService(t)
+	url := remote.URL + "/repo.git"
+	if _, err := svc.Create(t.Context(), scope, Input{Name: "Demo", RepositoryURL: url, DefaultBranch: "main"}); err == nil {
+		t.Fatal("private repository cloned without a token")
+	}
+	project, err := svc.Create(t.Context(), scope, Input{Name: "Demo", RepositoryURL: url, DefaultBranch: "main", RepositoryToken: "secret"})
+	if err != nil {
+		t.Fatalf("create with token: %v", err)
+	}
+	// The token reaches Git only through the child's environment, never the mirror's config.
+	if config, err := os.ReadFile(filepath.Join(project.MirrorPath, "config")); err != nil || strings.Contains(string(config), "Authorization") {
+		t.Fatalf("mirror config=%q err=%v", config, err)
+	}
+
+	work := filepath.Join(t.TempDir(), "work")
+	projectGit(t, filepath.Dir(work), "clone", "--quiet", bare, "work")
+	projectGit(t, work, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-m", "next")
+	next := projectGit(t, work, "rev-parse", "HEAD")
+	projectGit(t, work, "push", "--quiet", "origin", "HEAD:main")
+	result, err := svc.Sync(t.Context(), scope, project.ID)
+	if err != nil || result.Project.Commit != next {
+		t.Fatalf("sync with token: commit=%q err=%v", result.Project.Commit, err)
+	}
+
+	// A token the provider rejects leaves the snapshot and tells the user to replace it.
+	if _, err := svc.SetRepositoryToken(t.Context(), scope, project.ID, "revoked"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Sync(t.Context(), scope, project.ID); err == nil {
+		t.Fatal("sync with a rejected token succeeded")
+	}
+	stored, err := svc.Get(t.Context(), scope, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Commit != next || stored.SyncRunning || stored.SyncError != "仓库认证失败，请检查项目令牌后重试。" {
+		t.Fatalf("rejected token state=%+v", stored)
+	}
+}
+
+func TestSyncOutlivesTheRequestThatStartedIt(t *testing.T) {
+	remote, _, _, _ := syncGitRemote(t)
+	svc, _, scope := syncService(t)
+	project, err := svc.Create(t.Context(), scope, Input{Name: "Demo", RepositoryURL: remote.URL + "/repo.git", DefaultBranch: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The first click's request is already gone; the shared pull still completes and is recorded.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := svc.Sync(ctx, scope, project.ID); err != nil {
+		t.Fatalf("sync after the request ended: %v", err)
+	}
+	stored, err := svc.Get(t.Context(), scope, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.SyncAt == nil || stored.SyncRunning || stored.SyncError != "" {
+		t.Fatalf("stored=%+v", stored)
 	}
 }

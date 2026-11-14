@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"net/netip"
 	"net/url"
@@ -301,9 +300,15 @@ func (s *Service) runAuth(ctx context.Context, dir, authHeader string, args ...s
 	}
 	cmd.WaitDelay = time.Second
 	output := &limitedOutput{}
-	cmd.Stdout, cmd.Stderr = output, io.Discard
+	diagnostics := &truncatedOutput{}
+	cmd.Stdout, cmd.Stderr = output, diagnostics
 	err := cmd.Run()
-	return output.String(), err
+	if err != nil {
+		// Git reports why a command failed only on stderr; a caller that classifies the failure
+		// (sync's reason) needs it. It never contains the authorization header.
+		return output.String() + diagnostics.String(), err
+	}
+	return output.String(), nil
 }
 
 // authHeaderForToken turns a project token into the Basic authorization header for one Git
@@ -335,6 +340,17 @@ func (o *limitedOutput) Write(p []byte) (int, error) {
 		return 0, errors.New("git output exceeds limit")
 	}
 	return o.Builder.Write(p)
+}
+
+// truncatedOutput keeps the first 4 KiB of Git's diagnostics and drops the rest without failing
+// the command, so a long warning cannot turn a successful pull into an error.
+type truncatedOutput struct{ strings.Builder }
+
+func (o *truncatedOutput) Write(p []byte) (int, error) {
+	if room := 4096 - o.Len(); room > 0 {
+		o.Builder.Write(p[:min(len(p), room)])
+	}
+	return len(p), nil
 }
 
 func repositoryError(ctx context.Context) error {

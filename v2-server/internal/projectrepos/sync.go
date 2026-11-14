@@ -42,7 +42,9 @@ func (s *Service) Sync(ctx context.Context, scope execution.Scope, id string) (S
 	call := &syncCall{done: make(chan struct{})}
 	s.inflight[id] = call
 	s.mu.Unlock()
-	call.result, call.err = s.syncOne(ctx, scope, id)
+	// The pull belongs to the project, not to the first click: a client that disconnects must not
+	// cancel the fetch other clicks are waiting on, or leave the record marked as running.
+	call.result, call.err = s.syncOne(context.WithoutCancel(ctx), scope, id)
 	close(call.done)
 	s.mu.Lock()
 	delete(s.inflight, id)
@@ -72,7 +74,7 @@ func (s *Service) syncOne(ctx context.Context, scope execution.Scope, id string)
 	}
 	pullCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	output, err := s.runAuth(pullCtx, project.MirrorPath, auth, "fetch", "--no-tags", "--", project.RepositoryURL, project.Branch)
+	output, err := s.runAuth(pullCtx, project.MirrorPath, auth, "fetch", "--no-tags", "--", project.RepositoryURL, "refs/heads/"+project.Branch)
 	if err != nil {
 		reason := s.syncFailureReason(pullCtx, output)
 		return SyncResult{}, s.fail(ctx, scope, project, reason)
@@ -129,7 +131,8 @@ func (s *Service) syncFailureReason(ctx context.Context, output string) string {
 		return "同步超时，请检查仓库地址和网络后重试。"
 	}
 	lower := strings.ToLower(output)
-	for _, marker := range []string{"authentication failed", "could not read username", "invalid username or password", "returned error: 401", "returned error: 403"} {
+	for _, marker := range []string{"authentication failed", "could not read username", "could not read password",
+		"unable to get password", "invalid username or password", "returned error: 401", "returned error: 403"} {
 		if strings.Contains(lower, marker) {
 			return "仓库认证失败，请检查项目令牌后重试。"
 		}
