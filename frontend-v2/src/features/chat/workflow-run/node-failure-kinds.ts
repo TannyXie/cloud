@@ -45,3 +45,34 @@ export const HINT_PROMISES_INJECTION_KINDS: ReadonlySet<string> = new Set([
   "structured_output",
   "agent_refusal",
 ]);
+
+/**
+ * An interactive Agent node's session failed before any conversation, so the node row carries the
+ * single `interactive_session` kind and v2-server's failure `message` tells which situation it
+ * was. The frontend shows a scenario-specific reason and next step instead of the generic
+ * "check the agent process and network" text.
+ *
+ * Matching runs on v2-server's stable, test-covered messages (workflowhost/interactive.go): a
+ * reattached checkout Node no longer knows (a restart dropped its ledger/clone record) on the
+ * first turn, a checkout that no longer exists on a later turn, and a session setup the Agent
+ * refused. v2-server is temporary; when Cloud serves the contract the codes will align.
+ */
+export type InteractiveSessionScenario =
+  | "checkout_unknown"
+  | "workspace_gone"
+  | "setup_refused"
+  | "other";
+
+export function interactiveSessionScenario(message: string): InteractiveSessionScenario {
+  const m = message.toLowerCase();
+  if (m.includes("fresh clone") || m.includes("no longer knows the run's checkout")) {
+    return "checkout_unknown";
+  }
+  if (m.includes("no longer exists")) {
+    return "workspace_gone";
+  }
+  if (m.includes("could not be set up") || m.includes("refused the agent session")) {
+    return "setup_refused";
+  }
+  return "other";
+}

@@ -458,7 +458,20 @@ export const workflowRunTranslations = {
     "workflowRun.errorHint.session": "检查智能体进程与网络后续跑",
     "workflowRun.errorKind.interactive_session": "交互会话未能建立",
     "workflowRun.errorHint.interactive_session":
-      "交互节点不会自动重试；检查智能体进程与网络后续跑",
+      "交互节点不会自动重试；可在顶部点击「从失败处继续」重跑这个节点，或点击「再跑一次」创建新运行",
+    "workflowRun.errorKind.interactive_session.checkout_unknown":
+      "Node 已不认识本运行的 checkout",
+    "workflowRun.errorHint.interactive_session.checkout_unknown":
+      "本运行重启后，Node 丢失了这次 checkout 的 clone 记录，交互节点的会话没有开始过；从失败处继续会在新的 clone 上开始，之前节点已完成的改动仍保留",
+    "workflowRun.errorKind.interactive_session.workspace_gone": "工作区已不存在",
+    "workflowRun.errorHint.interactive_session.workspace_gone":
+      "交互节点的工作区已丢失，会话无法继续；从失败处继续会在新的 clone 上重新开始，之前的改动不会保留",
+    "workflowRun.errorKind.interactive_session.setup_refused": "交互会话未能建立",
+    "workflowRun.errorHint.interactive_session.setup_refused":
+      "智能体拒绝了本次会话（通常是模型配置、智能体进程或网络问题），交互节点不会自动重试；修复后从失败处继续",
+    "workflowRun.errorServerDetail": "服务端原因",
+    "workflowRun.errorServerDetailHint":
+      "以下为服务端返回的原始原因，通常用于排查，不一定需要理解。",
     "workflowRun.errorKind.starter_unavailable": "运行的发起人已不可用",
     "workflowRun.errorHint.starter_unavailable":
       "发起人已不在团队中或账号已停用，智能体以发起人的身份执行，不会自动重试；请用「再跑一次」重新运行",
@@ -1077,7 +1090,22 @@ export const workflowRunTranslations = {
     "workflowRun.errorKind.interactive_session":
       "Interactive session could not start",
     "workflowRun.errorHint.interactive_session":
-      "Interactive nodes never retry automatically; check the agent process and network, then resume",
+      "Interactive nodes never retry automatically; resume this node from the failure, or run the workflow again",
+    "workflowRun.errorKind.interactive_session.checkout_unknown":
+      "Node no longer knows this run's checkout",
+    "workflowRun.errorHint.interactive_session.checkout_unknown":
+      "After a restart, Node lost the clone record for this checkout, and the interactive node's session never started; resuming from the failure starts the node on a fresh clone. Work earlier nodes completed is kept",
+    "workflowRun.errorKind.interactive_session.workspace_gone":
+      "The workspace no longer exists",
+    "workflowRun.errorHint.interactive_session.workspace_gone":
+      "The interactive node's workspace is gone, so its session cannot continue; resuming from the failure starts over on a fresh clone, and previous changes are not kept",
+    "workflowRun.errorKind.interactive_session.setup_refused":
+      "Interactive session could not start",
+    "workflowRun.errorHint.interactive_session.setup_refused":
+      "The agent refused this session (usually a model configuration, agent process or network issue); interactive nodes never retry automatically. Fix it, then resume from the failure",
+    "workflowRun.errorServerDetail": "Server reason",
+    "workflowRun.errorServerDetailHint":
+      "This is the raw reason the server returned, usually for debugging; it does not need to be understood.",
     "workflowRun.errorKind.starter_unavailable":
       "Run starter unavailable",
     "workflowRun.errorHint.starter_unavailable":

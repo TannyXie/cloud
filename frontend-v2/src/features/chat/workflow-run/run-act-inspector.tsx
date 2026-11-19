@@ -42,6 +42,7 @@ import {
   HINT_PROMISES_INJECTION_KINDS,
   NODE_FAILURE_KINDS,
   PROMPT_INJECTED_FAILURE_KINDS,
+  interactiveSessionScenario,
 } from "./node-failure-kinds";
 
 const KNOWN_NODE_FAILURE_KINDS = new Set<string>(NODE_FAILURE_KINDS);
@@ -348,6 +349,12 @@ function RunActInspectorPanel({
     state.errorDetail != null &&
     PROMPT_INJECTED_FAILURE_KINDS.has(state.errorDetail.kind) &&
     state.errorDetail.injectsPreviousFailure === false;
+  // An interactive session failure carries one kind with several situations in its message; show
+  // the scenario's own reason and next step instead of the generic agent/network hint.
+  const interactiveScenario =
+    state.errorDetail?.kind === "interactive_session"
+      ? interactiveSessionScenario(state.errorDetail.message)
+      : undefined;
   const canEdit = editable && onPatchNode !== undefined;
   const promptLabel = nodeType.configFields.includes("initialPrompt")
     ? t("settings.workflow.field.initialPrompt")
@@ -675,18 +682,26 @@ function RunActInspectorPanel({
                     <McpFailureDetail detail={state.errorDetail} />
                     <p className="font-medium">
                       {KNOWN_NODE_FAILURE_KINDS.has(state.errorDetail.kind)
-                        ? t(`workflowRun.errorKind.${state.errorDetail.kind}`)
+                        ? t(
+                            interactiveScenario != null &&
+                              interactiveScenario !== "other"
+                              ? `workflowRun.errorKind.interactive_session.${interactiveScenario}`
+                              : `workflowRun.errorKind.${state.errorDetail.kind}`,
+                          )
                         : state.errorDetail.kind}
                     </p>
                     {KNOWN_NODE_FAILURE_KINDS.has(state.errorDetail.kind) && (
                       <p>
                         {t(
-                          injectionSwitchedOff &&
-                            HINT_PROMISES_INJECTION_KINDS.has(
-                              state.errorDetail.kind,
-                            )
-                            ? `workflowRun.errorHintWithoutInjection.${state.errorDetail.kind}`
-                            : `workflowRun.errorHint.${state.errorDetail.kind}`,
+                          interactiveScenario != null &&
+                            interactiveScenario !== "other"
+                            ? `workflowRun.errorHint.interactive_session.${interactiveScenario}`
+                            : injectionSwitchedOff &&
+                                HINT_PROMISES_INJECTION_KINDS.has(
+                                  state.errorDetail.kind,
+                                )
+                              ? `workflowRun.errorHintWithoutInjection.${state.errorDetail.kind}`
+                              : `workflowRun.errorHint.${state.errorDetail.kind}`,
                         )}
                       </p>
                     )}
@@ -712,7 +727,21 @@ function RunActInspectorPanel({
                       )}
                   </div>
                 )}
-                <p>{state.errorMessage}</p>
+                {interactiveScenario != null &&
+                state.errorMessage !== undefined &&
+                state.errorMessage !== "" ? (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-muted-foreground/80">
+                      {t("workflowRun.errorServerDetail")}
+                    </summary>
+                    <p className="mt-1 text-muted-foreground/80">
+                      {t("workflowRun.errorServerDetailHint")}
+                    </p>
+                    <p className="mt-1">{state.errorMessage}</p>
+                  </details>
+                ) : (
+                  <p>{state.errorMessage}</p>
+                )}
               </div>
             )}
           {state.status === "failed" && startedAutoRetries > 0 && (
